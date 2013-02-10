@@ -159,21 +159,27 @@ syncem.registerClass('ObjectRemovedMove', function (objectId) {
 	};
 });
 
-syncem.registerClass('ObjectChatMove', function (objectId, message) {
+syncem.registerClass('ObjectChatMove', function (objectId, message, ttl) {
 	syncem.SyncObjectMove.call(this, objectId);
 	
 	this.syncData.message = message;
+	this.syncData.ttl = ttl || 50;
 	
 	this.apply = function(state) {
-		state.syncData.messages.push({
-			id: this.syncData.id,
-			objectId: this.syncData.objectId,
-			message: this.syncData.message
-		});
+		state.syncData.messages.push(this.getMessageData(state));
 		if (state.syncData.messages.length > 50) {
 			state.syncData.messages.shift();
 		}
-	}
+	};
+	
+	this.getMessageData = function(state) {
+		return {
+			id: this.syncData.id,
+			objectId: this.syncData.objectId,
+			message: this.syncData.message,
+			expiresAt: state.tick + 50
+		};
+	};
 });
 
 syncem.registerClass('SyncRoot', function () {
@@ -186,11 +192,18 @@ syncem.registerClass('SyncRoot', function () {
 	
 	this.update = function() {
 		for (var moveId in this.syncData.moves) {
-			console.log("Applying move at ", this.syncData.tick, ": ", this.syncData.moves[moveId]);
+//			console.log("Applying move at ", this.syncData.tick, ": ", this.syncData.moves[moveId]);
 			this.syncData.moves[moveId].apply(this);
 		}
 		for (var objId in this.syncData.objects) {
 			this.syncData.objects[objId].update();
+		}
+		for (var messageIndex = 0; messageIndex < this.syncData.messages.length ; messageIndex ++) {
+			var message = this.syncData.messages[messageIndex];
+			if (message.expiry && this.syncData.tick >= message.expiresAt) {
+				this.syncData.messages.splice(messageIndex, 1);
+				messageIndex--;
+			}
 		}
 	};
 	
@@ -255,7 +268,7 @@ syncem.Syncer = function (config) {
 	this.addMove = function(move) {
 		var now_tick = this.getNowTick();
 		var valid = move.syncData.tick > this.getOldestTick() && move.syncData.tick <= now_tick;
-		console.log("addMove valid tick range:",this.getOldestTick(),"->",now_tick,":",move);
+//		console.log("addMove valid tick range:",this.getOldestTick(),"->",now_tick,":",move);
 		if (valid) {
 			if (move.syncData.tick >= now_tick) {
 				if (!(move.syncData.tick in this.queuedMoves)) {
@@ -270,6 +283,9 @@ syncem.Syncer = function (config) {
 			if (move.syncData.tick <= this.dirty_tick) {
 				this.dirty_tick = move.syncData.tick - 1;
 			}
+		}
+		else {
+			console.warn("addMove failed, out of range (",this.getOldestTick(),"->",now_tick,"):", move);
 		}
 		return valid;
 	};
