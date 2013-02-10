@@ -159,12 +159,30 @@ syncem.registerClass('ObjectRemovedMove', function (objectId) {
 	};
 });
 
+syncem.registerClass('ObjectChatMove', function (objectId, message) {
+	syncem.SyncObjectMove.call(this, objectId);
+	
+	this.syncData.message = message;
+	
+	this.apply = function(state) {
+		state.syncData.messages.push({
+			id: this.syncData.id,
+			objectId: this.syncData.objectId,
+			message: this.syncData.message
+		});
+		if (state.syncData.messages.length > 50) {
+			state.syncData.messages.shift();
+		}
+	}
+});
+
 syncem.registerClass('SyncRoot', function () {
 	syncem.SyncOb.call(this);
 	
 	this.syncData.tick = 0;
 	this.syncData.moves = {};
 	this.syncData.objects = {};
+	this.syncData.messages = [];
 	
 	this.update = function() {
 		for (var moveId in this.syncData.moves) {
@@ -175,6 +193,18 @@ syncem.registerClass('SyncRoot', function () {
 			this.syncData.objects[objId].update();
 		}
 	};
+	
+	this.getAsInitial = function() {
+		return {
+			type: this.type,
+			syncData: {
+				tick: this.syncData.tick,
+				objects: this.syncData.objects,
+				// arguably, messages does not belong as people not in the channel yet are not privy to this?
+				messages: this.syncData.messages
+			}
+		};
+	}
 });
 
 syncem.Syncer = function (config) {
@@ -250,7 +280,6 @@ syncem.Syncer = function (config) {
 	}
 	
 	this.update = function() {
-		var now = new Date().getTime();
 		var now_tick = this.getNowTick();
 		while (this.dirty_tick < now_tick) {
 			var prev_tick = this.dirty_tick++;
@@ -274,15 +303,19 @@ syncem.Syncer = function (config) {
 				next_state.syncData.moves = {};
 				next_state.syncData.tick = this.dirty_tick;
 			}
-			//Wipe the moves out from the fresh copy
+			//Any queued moves for this state?
 			if (this.dirty_tick in this.queuedMoves) {
-				console.log("Enqueued moves ", this.dirty_tick);
-				next_state.syncData.moves = this.queuedMoves[this.dirty_tick];
+				var moves = this.queuedMoves[this.dirty_tick];
+				for (var moveId in moves) {
+					console.log("Adding queued move ", moveId, ":", moves[moveId]);
+					next_state.syncData.moves[moveId] = moves[moveId];
+				}
 				delete this.queuedMoves[this.dirty_tick];
 			}
 			
 			//Only copy the objects, not the moves
 			next_state.syncData.objects = syncem.copyObject(next_state.syncData.objects, prev_state.syncData.objects);
+			next_state.syncData.messages = syncem.copyObject(next_state.syncData.messages, prev_state.syncData.messages);
 			next_state.update();
 			if (this.tick < this.dirty_tick) {
 				this.tick = this.dirty_tick;
@@ -292,7 +325,7 @@ syncem.Syncer = function (config) {
 	
 	this.getOldestTick = function() {
 		return Math.max(0, this.tick - config.history_size + 1);
-	}
+	};
 	
 	this.getState = function(tick) {
 		if (tick == null) {
@@ -303,26 +336,45 @@ syncem.Syncer = function (config) {
 			state = this.states[tick % this.config.history_size];
 		}
 		return state;
-	}
+	};
+	
+	this.getAllMovesByTick = function() {
+		var moves_by_tick = {};
+		function addMoves(moves) {
+			for (var move_id in moves) {
+				var move = moves[move_id];
+				if (!(move.syncData.tick in moves_by_tick)) {
+					moves_by_tick[move.syncData.tick] = {};
+				}
+				moves_by_tick[move.syncData.tick][move_id] = move;
+			}
+		}
+		for (var stateIndex = 0; stateIndex < this.states.length; stateIndex ++) {
+			addMoves(this.states[stateIndex].syncData.moves);
+		}
+		for (var tick in this.queuedMoves) {
+			addMoves(this.queuedMoves[tick]);
+		}
+		return moves_by_tick;
+	};
 	
 	this.getSetup = function() {
 		var oldest_tick = this.getOldestTick();
 		return {
 			config:this.config,
-			oldest_tick:oldest_tick,
-			oldest_state:this.states[oldest_tick % this.config.history_size],
+			oldest: this.states[oldest_tick % this.config.history_size].getAsInitial(),
 			current_tick:this.getNowTick(),
-			user_id:syncem.makeUid()
+			moves: this.getAllMovesByTick()
 		};
 	};
 }
 
 syncem.Syncer.createFromSetup = function(setup) {
 	var syncer = new syncem.Syncer(setup.config);
-	syncer.dirty_tick = setup.oldest_tick;
-	syncer.tick = setup.current_tick;
-	syncer.states[syncer.dirty_tick % syncer.config.history_size] = syncem.create(setup.oldest_state);
+	syncer.states[setup.oldest.syncData.tick % syncer.config.history_size] = syncem.create(setup.oldest);
+	syncer.tick = syncer.dirty_tick = setup.oldest.syncData.tick;
 	syncer.start_time = new Date().getTime() - setup.current_tick * 1000 / syncer.config.lps;
+	syncer.queuedMoves = syncem.copyObject(syncer.queuedMoves, setup.moves);
 	syncer.update();
 	syncer.startInterval();
 	return syncer;
