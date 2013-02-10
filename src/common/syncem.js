@@ -11,11 +11,11 @@ syncem.registerClass = function(name, ctor) {
 	}
 };
 
-syncem.uniqSeed = new Date().getTime().toString(16) + '-' + ((Math.random() * 0x1000000)|0).toString(16);
+syncem.uniqSeed = new Date().getTime().toString(36) + '-' + ((Math.random() * 60466176)|0).toString(36);
 syncem.uniqSeq = 0;
 
 syncem.makeUid = function() {
-	return syncem.uniqSeed + '-' + syncem.uniqSeq++;
+	return syncem.uniqSeed + '-' + (syncem.uniqSeq++).toString(36);
 };
 
 syncem.registerClass('SyncOb', function () {
@@ -265,12 +265,12 @@ syncem.Syncer = function (config) {
 		}
 	};
 
-	this.addMove = function(move) {
-		var now_tick = this.getNowTick();
-		var valid = move.syncData.tick > this.getOldestTick() && move.syncData.tick <= now_tick;
+	this.addMove = function(move, allowFuture) {
+		var next_tick = Math.ceil(this.getNowTick());
+		var valid = move.syncData.tick > this.getOldestTick() && (allowFuture || move.syncData.tick <= next_tick);
 //		console.log("addMove valid tick range:",this.getOldestTick(),"->",now_tick,":",move);
 		if (valid) {
-			if (move.syncData.tick >= now_tick) {
+			if (move.syncData.tick >= next_tick) {
 				if (!(move.syncData.tick in this.queuedMoves)) {
 					this.queuedMoves[move.syncData.tick] = {};
 				}
@@ -285,7 +285,7 @@ syncem.Syncer = function (config) {
 			}
 		}
 		else {
-			console.warn("addMove failed, out of range (",this.getOldestTick(),"->",now_tick,"):", move);
+			console.warn("addMove failed, out of range (",this.getOldestTick(),"->",next_tick,"):", move);
 		}
 		return valid;
 	};
