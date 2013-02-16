@@ -115,12 +115,12 @@ function copyFieldsExcluding(dst, src, exclude) {
 	}
 	var fieldName;
 	for (fieldName in src) {
-		if (!(src in exclude)) {
+		if (!(fieldName in exclude)) {
 			copyOffset(dst, src, fieldName);
 		}
 	}
 	for (fieldName in dst) {
-		if (!(src in exclude) && !(fieldName in src)) {
+		if (!(fieldName in exclude) && !(fieldName in src)) {
 			delete dst[fieldName];
 		}
 	}
@@ -320,6 +320,9 @@ function deserialize(input) {
 					break;
 			}
 		}
+	}
+	if (output === undefined) {
+		console.warn("Failed to deserialize ", input);
 	}
 	return output;
 }
@@ -547,7 +550,13 @@ Syncer.prototype.addMove = function(move, allowFuture) {
 			this.queuedMoves[move.tick][move.id] = move;
 		}
 		else {
-			this.getState(move.tick).moves[move.id] = move;
+			var move_state = this.getState(move.tick);
+			if (move_state) {
+				move_state.moves[move.id] = move;
+			}
+			else {
+				console.error("Failed to add move ", move, ", move state null, oldest=",this.getOldestTick()," next=" + next_tick);
+			}
 		}
 		if (move.tick <= this.dirty_tick) {
 			this.dirty_tick = move.tick - 1;
@@ -643,19 +652,19 @@ Syncer.prototype.getAllMovesByTick = function() {
 Syncer.prototype.getSetup = function() {
 	var oldest_tick = this.getOldestTick();
 	return {
-		config:this.config,
-		oldest: this.states[oldest_tick % this.config.history_size].getAsInitial(),
-		current_tick:this.getNowTick(),
+		config: this.config,
+		oldest: this.states[oldest_tick % this.config.history_size],
+		current_tick: this.getNowTick(),
 		moves: this.getAllMovesByTick()
 	};
 };
 
 syncem.Syncer.createFromSetup = function(setup) {
 	var syncer = new syncem.Syncer(setup.config);
-	syncer.states[setup.oldest.tick % syncer.config.history_size] = syncem.create(setup.oldest);
+	syncer.states[setup.oldest.tick % syncer.config.history_size] = setup.oldest;
 	syncer.tick = syncer.dirty_tick = setup.oldest.tick;
 	syncer.start_time = new Date().getTime() - setup.current_tick * 1000 / syncer.config.lps;
-	syncer.queuedMoves = copyObject(syncer.queuedMoves, setup.moves);
+	syncer.queuedMoves = setup.moves;
 	syncer.update();
 	syncer.startInterval();
 	return syncer;
