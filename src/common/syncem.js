@@ -483,9 +483,9 @@ function deserialize(input, objectdb_in, objectdb_out) {
 		console.log("Using reference " + reference + " in output db");
 	}
 	else {
-		if (reference != null) {
-			console.log("Failed to find reference " + reference + " in output db");
-		}
+//		if (reference != null) {
+//			console.log("Failed to find reference " + reference + " in output db");
+//		}
 		if (reference != null && objectdb_in[reference] != null) {
 			input = objectdb_in[reference];
 			delete input.i;
@@ -844,7 +844,7 @@ Syncer.prototype.stop = function() {
 };
 
 Syncer.prototype.addMove = function(move, allowFuture) {
-	var next_tick = Math.ceil(this.getNowTick());
+	var next_tick = Math.ceil(this.getNowTick()) + 1;
 	var valid = move.tick > this.getOldestTick() && (allowFuture || move.tick <= next_tick);
 //		console.log("addMove valid tick range:",this.getOldestTick(),"->",now_tick,":",move);
 	if (valid) {
