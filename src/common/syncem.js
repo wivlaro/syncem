@@ -866,7 +866,7 @@ Syncer.prototype.addMove = function(move, allowFuture) {
 		}
 		if (move.tick <= this.dirty_tick) {
 			console.log("Old move at ",move.tick," causing dirtiness from ",this.dirty_tick);
-			this.dirty_tick = move.tick - 2;
+			this.dirty_tick = move.tick - 1;
 		}
 	}
 	else {
