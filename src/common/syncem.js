@@ -222,7 +222,7 @@ function copyFields(dst, src, objectdb) {
 	return dst;
 }
 
-var fs = typeof require === 'function' ? require('fs'): null;
+//var fs = typeof require === 'function' ? require('fs'): null;
 
 function copyObject(dst, src, objectdb) {
 //	indent += ' ';
@@ -693,7 +693,7 @@ syncem.ObjectRemovedMove = ObjectRemovedMove;
 syncem.registerClass(ObjectRemovedMove);
 
 ObjectRemovedMove.prototype.apply = function(state) {
-	console.log("Applying ObjectRemovedMove for ", this.objectId);
+	console.log("Applying ObjectRemovedMove for ", this.objectId, " in tick ", state.tick);
 	state.objects[this.objectId].onDelete(state);
 	delete state.objects[this.objectId];
 };
