@@ -198,7 +198,7 @@ function copyObject(dst, src, objectdb) {
 		var found = objectdb.get(src);
 		if (found != null) {
 			dst = found;
-			console.log("Found " + src.$syncemid + " in copy db");
+//			console.log("Found " + src.$syncemid + " in copy db");
 		}
 		else if ((global.Uint8Array && src instanceof global.Uint8Array) 
 			|| (global.Uint16Array && src instanceof global.Uint16Array) 
