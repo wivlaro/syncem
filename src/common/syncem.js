@@ -37,6 +37,17 @@ syncem.makeUid = function() {
 	return syncem.uniqSeed + '-' + (uniqSeq++).toString(36);
 };
 
+
+
+function simpleChecksum(str) {
+	var checksum = 0;
+	for (var i=0 ; i < str.length ; i++) {
+		checksum = str.charCodeAt(i) ^ (checksum << 5) ^ (checksum >>> 27);
+	}
+	return checksum;
+}
+syncem.simpleChecksum = simpleChecksum;
+
 function ObjectMapper() {
 	this.objects = [];
 }
@@ -188,6 +199,7 @@ function copyObject(dst, src, objectdb) {
 //	console.log(indent + "copying object: " + src);
 	var top_level = objectdb == null;
 	if (objectdb == null) {
+		var t0 = new Date().getTime();
 		objectdb = new ObjectMapper();
 	}
 //	console.trace();
@@ -242,7 +254,7 @@ function copyObject(dst, src, objectdb) {
 		}
 	}
 	if (top_level) {
-//		console.log("Copy finished, used ", objectdb.objects.length, "objects");
+		console.log("Copy finished, used ", objectdb.objects.length, "objects. copy took " , new Date().getTime() - t0 , "ms; mem=", process.memoryUsage());
 		objectdb.cleanup();
 //		var serialized_dst = JSON.stringify(syncem.serialize(dst), null, ' ');
 //		if (serialized_dst != prev_serialized) {
@@ -259,8 +271,8 @@ function copyObject(dst, src, objectdb) {
 //	indent = indent.substr(0,indent.length - 1);
 	return dst;
 }
-var prev_serialized = null;
-var bcount = 0;
+//var prev_serialized = null;
+//var bcount = 0;
 
 function serialize(input, objectdb) {
 //	console.log("registrations:", registrationsByIndex.length);
@@ -392,6 +404,9 @@ function serialize(input, objectdb) {
 			output = {};
 		}
 		output.d = objectdb.getFinalValues();
+	}
+	if (output != null && 'n' in output && output.n == null) {
+		console.error("Outputting null as a number?!" , input);
 	}
 	return output;
 }
@@ -714,12 +729,7 @@ SyncRoot.prototype.getAsInitial = function() {
 }
 
 SyncRoot.prototype.getChecksum = function() {
-	var serialized = JSON.stringify(serialize(this)) + JSON.stringify(serialize(this.moves));
-	var checksum = 0;
-	for (var i=0 ; i < serialized.length ; i++) {
-		checksum = serialized.charCodeAt(i) ^ (checksum << 5) ^ (checksum >>>27);
-	}
-	return checksum;
+	return simpleChecksum(JSON.stringify(serialize(this)) + JSON.stringify(serialize(this.moves)));
 };
 
 
@@ -758,9 +768,16 @@ Syncer.prototype.start = function(state, tick) {
 Syncer.prototype.startInterval = function() {
 	var syncer = this;
 	console.log("startInterval with time ", new Date(syncer.start_time));
+	var interval_ms = 1000 / this.config.lps;
 	this.interval = setInterval(function() {
+		var t0 = new Date().getTime();
 		syncer.update();
-	}, 1000 / this.config.lps);
+		var time_taken = new Date().getTime() - t0;
+//		if (time_taken >= interval_ms) {
+//			console.warn("Update didn't complete in time, took ", time_taken, " >= ", interval_ms);
+//		}
+		console.warn("Update took ", time_taken, " (want ", interval_ms, ")");
+	}, interval_ms);
 };
 
 Syncer.prototype.stop = function() {
