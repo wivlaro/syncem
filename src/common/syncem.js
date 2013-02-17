@@ -49,17 +49,39 @@ function simpleChecksum(str) {
 syncem.simpleChecksum = simpleChecksum;
 
 function ObjectMapper() {
+	this.num_objects = 0;
 	this.objects = [];
 }
+ObjectMapper.pool = [];
+ObjectMapper.create = function () {
+	var mapper;
+	if (ObjectMapper.pool.length > 0) {
+//		console.log("Recycling object mapper from pool of "+ ObjectMapper.pool.length);
+		mapper = ObjectMapper.pool.shift();
+	}
+	else {
+//		console.log("Creating new ObjectMapper");
+		mapper = new ObjectMapper();
+	}
+	return mapper;
+};
+
 ObjectMapper.prototype.set = function(k, v) {
 	if (k.$syncemid != null) {
 		console.trace('Object already set ' + k.$syncemid);
 		this.objects[k.$syncemid].v = v;
 	}
 	else {
-		k.$syncemid = this.objects.length;
+		k.$syncemid = this.num_objects++;
+		if (this.num_objects > this.objects.length) {
+			this.objects.push({k:k,v:v});
+		}
+		else {
+			var obj = this.objects[k.$syncemid];
+			obj.k = k;
+			obj.v = v;
+		}
 //		console.trace('Setting object ' + k.$syncemid);
-		this.objects.push({k:k,v:v});
 	}
 	return k.$syncemid;
 };
@@ -69,21 +91,29 @@ ObjectMapper.prototype.get = function(k) {
 ObjectMapper.prototype.getIndex = function(k) {
 	return k.$syncemid;
 };
-ObjectMapper.prototype.cleanup = function() {
-	var values = [];
-	for (var i=0;i<this.objects.length;i++) {
-		delete this.objects[i].k.$syncemid;
+ObjectMapper.prototype.discard = function() {
+	for (var i=0;i<this.num_objects;i++) {
+		var obj = this.objects[i];
+		delete obj.k.$syncemid;
+		obj.k = null;
+		obj.v = null;
 	}
-	return values;
+	this.num_objects = 0;
+	ObjectMapper.pool.push(this);
 };
-ObjectMapper.prototype.getFinalValues = function(debug) {
+ObjectMapper.prototype.getFinalValues = function() {
 	var values = [];
-	values.length = this.objects.length;
-	for (var i=0;i<this.objects.length;i++) {
-		delete this.objects[i].k.$syncemid;
-		values[i] = this.objects[i].v;
+	values.length = this.num_objects;
+	for (var i=0;i<this.num_objects;i++) {
+		var obj = this.objects[i];
+		delete obj.k.$syncemid;
+		values[i] = obj.v;
 		values[i].i = i;
+		obj.k = null;
+		obj.v = null;
 	}
+	this.num_objects = 0;
+	ObjectMapper.pool.push(this);
 	return values;
 };
 
@@ -127,7 +157,7 @@ function copyArray(dst_array, src_array, objectdb) {
 function copyFieldsWithConfig(dst, src, config, objectdb) {
 	var top_level = objectdb == null;
 	if (top_level) {
-		objectdb = new ObjectMapper();
+		objectdb = ObjectMapper.create();
 	}
 	if (config.fields) {
 		objectdb.set(src, dst);
@@ -150,7 +180,7 @@ function copyFieldsWithConfig(dst, src, config, objectdb) {
 		copyFields(dst, src, objectdb);
 	}
 	if (top_level) {
-		objectdb.cleanup();
+		objectdb.discard();
 	}
 }
 
@@ -199,8 +229,8 @@ function copyObject(dst, src, objectdb) {
 //	console.log(indent + "copying object: " + src);
 	var top_level = objectdb == null;
 	if (objectdb == null) {
-		var t0 = new Date().getTime();
-		objectdb = new ObjectMapper();
+//		var t0 = new Date().getTime();
+		objectdb = ObjectMapper.create();
 	}
 //	console.trace();
 	if (src === null) {
@@ -244,7 +274,26 @@ function copyObject(dst, src, objectdb) {
 			}
 			if (config) {
 				if (!dst || src.constructor !== dst.constructor) {
-					dst = new config.ctor();
+					if (config.ctor_args) {
+						var params = [];
+						for (var argIndex = 0; argIndex < config.ctor_args.length ; argIndex++) {
+							var arg_field = config.ctor_args[argIndex]
+							var arg_value;
+							if (arg_field in src) {
+								arg_value = src[arg_field];
+							}
+							params.push(arg_value);
+						}
+						//Need to be able to call constructors with specific deserialized parameters.... !?
+						dst = Object.create(config.ctor.prototype);
+						var ctor_output = config.ctor.apply(dst, params);
+						if (Object(ctor_output) === ctor_output) {
+							dst = ctor_output;
+						}
+					}
+					else {
+						dst = new config.ctor();
+					}
 				}
 				copyFieldsWithConfig(dst, src, config, objectdb);
 			}
@@ -254,8 +303,8 @@ function copyObject(dst, src, objectdb) {
 		}
 	}
 	if (top_level) {
-		console.log("Copy finished, used ", objectdb.objects.length, "objects. copy took " , new Date().getTime() - t0 , "ms; mem=", process.memoryUsage());
-		objectdb.cleanup();
+//		console.log("Copy finished, used ", objectdb.objects.length, "objects. copy took " , new Date().getTime() - t0 , "ms; mem=", global.process != null ? process.memoryUsage() : '?');
+		objectdb.discard();
 //		var serialized_dst = JSON.stringify(syncem.serialize(dst), null, ' ');
 //		if (serialized_dst != prev_serialized) {
 //			prev_serialized = serialized_dst;
@@ -278,7 +327,7 @@ function serialize(input, objectdb) {
 //	console.log("registrations:", registrationsByIndex.length);
 	var top_level = objectdb === undefined;
 	if (top_level) {
-		objectdb = new ObjectMapper();
+		objectdb = ObjectMapper.create();
 	}
 	var payload;
 	var output;
@@ -699,6 +748,11 @@ SyncRoot.prototype.applyMoves = function() {
 };
 
 SyncRoot.prototype.updateObjects = function() {
+//	var n_objects = 0;
+//	for (var objId in this.objects) {
+//		n_objects ++;
+//	}
+//	console.log("Updating SyncRoot with ", n_objects, " objects");
 	for (var objId in this.objects) {
 		this.objects[objId].update(this);
 	}
@@ -728,8 +782,8 @@ SyncRoot.prototype.getAsInitial = function() {
 	return out;
 }
 
-SyncRoot.prototype.getChecksum = function() {
-	return simpleChecksum(JSON.stringify(serialize(this)) + JSON.stringify(serialize(this.moves)));
+SyncRoot.prototype.getCheckString = function() {
+	return JSON.stringify(serialize(this)) + JSON.stringify(serialize(this.moves));
 };
 
 
@@ -771,12 +825,14 @@ Syncer.prototype.startInterval = function() {
 	var interval_ms = 1000 / this.config.lps;
 	this.interval = setInterval(function() {
 		var t0 = new Date().getTime();
+//		console.log("Updating at ", t0);
 		syncer.update();
 		var time_taken = new Date().getTime() - t0;
-//		if (time_taken >= interval_ms) {
-//			console.warn("Update didn't complete in time, took ", time_taken, " >= ", interval_ms);
-//		}
-		console.warn("Update took ", time_taken, " (want ", interval_ms, ")");
+		if (time_taken >= interval_ms) {
+			console.warn("syncer.update took " + time_taken + "ms (interval is " + interval_ms + "ms)");
+		}
+//		console.log("Updating at ", t0);
+//		console.warn("Update took ", time_taken, " (want ", interval_ms, ")");
 	}, interval_ms);
 };
 
@@ -810,7 +866,7 @@ Syncer.prototype.addMove = function(move, allowFuture) {
 		}
 		if (move.tick <= this.dirty_tick) {
 			console.log("Old move at ",move.tick," causing dirtiness from ",this.dirty_tick);
-			this.dirty_tick = move.tick - 1;
+			this.dirty_tick = move.tick - 2;
 		}
 	}
 	else {
@@ -826,6 +882,7 @@ Syncer.prototype.getNowTick = function() {
 
 Syncer.prototype.update = function() {
 	var now_tick = this.getNowTick();
+//	console.log("Updating ", this.dirty_tick, "->", now_tick);
 	while (this.dirty_tick < now_tick) {
 		var prev_tick = this.dirty_tick++;
 
@@ -844,6 +901,7 @@ Syncer.prototype.update = function() {
 		else if (next_state.tick != this.dirty_tick) {
 			//clear out old invalid moves
 			next_state.moves = {};
+			next_state.record = null;
 		}
 		//Any queued moves for this state?
 		if (this.dirty_tick in this.queuedMoves) {
@@ -861,7 +919,30 @@ Syncer.prototype.update = function() {
 //		console.log("copied ", prev_tick, " into ", this.dirty_tick);
 		next_state.tick = this.dirty_tick;
 		next_state.update();
-//		console.log("updated", serialize(prev_state));
+		
+//		if (typeof require != 'undefined') {
+//			var util = require('util');
+//			var old_record = next_state.record;
+//			delete next_state.record;
+//			var record = util.inspect(next_state, false, 10);
+//			if (old_record && replays_written < 10) {
+//				if (record != old_record) {
+//					console.log("Dumping rewound results");
+//					var fs = require('fs');
+//					var serial = this.dirty_tick;
+//					while (serial.length < 9) serial = '0' + serial;
+//					fs.writeFile('dump_' + serial + 'a.json', old_record);
+//					fs.writeFile('dump_' + serial + 'b.json', record);
+//					replays_written++;
+//				}
+//				else {
+//					console.log("REPLAY IDENTICAL! :D");
+//				}
+//			}
+//			next_state.record = record;
+//		}
+		
+//		console.log("updated", this.dirty_tick);
 		if (this.tick < this.dirty_tick) {
 			this.tick = this.dirty_tick;
 		}
@@ -870,6 +951,7 @@ Syncer.prototype.update = function() {
 		}
 	}
 };
+//var replays_written = 0;
 
 Syncer.prototype.getOldestTick = function() {
 	return Math.max(0, this.tick - this.config.history_size + 1);
