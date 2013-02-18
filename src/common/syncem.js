@@ -1,14 +1,15 @@
 (function(syncem) {
 
-var registrationsByConstructor = {};
+//var registrationsByConstructor = {};
 var registrationsByIndex = [];
 
-syncem.registerClass = function(config, ctor) {
-	if (typeof ctor === 'undefined') {
-		ctor = config;
+var gen_expansions = global.syncem_expansions == null ? {} : null;
+
+syncem.registerClass = function(ctor, config) {
+	if (typeof config === 'undefined') {
 		config = {};
 	}
-	if (Array.isArray(config)) {
+	else if (Array.isArray(config)) {
 		config = {
 			fields: config
 		};
@@ -25,9 +26,83 @@ syncem.registerClass = function(config, ctor) {
 		}
 	}
 	config.ctor = ctor;
-	config.index = registrationsByIndex.length;
+	ctor.$syncemclassid = config.index = registrationsByIndex.length;
 	registrationsByIndex.push(config);
-	registrationsByConstructor[ctor] = config;
+	
+	if (global.syncem_expansions) {
+		if (global.syncem_expansions[config.index] != null) {
+			for (var func in global.syncem_expansions[config.index]) {
+				console.log("Using syncem_expansions for " + config.index + "." + func);
+				config[func] = global.syncem_expansions[config.index][func];
+			}
+		}
+	}
+	else if (config.fields) {
+		var copy_body = [];
+		copy_body.push('if (dst == null) {');
+		var ctor_params = [];
+		if (config.ctor_args) {
+			for (var ci = 0 ; ci < config.ctor_args.length; ci++) {
+				ctor_params.push('src.' + config.ctor_args[ci]);
+			}
+		}
+		copy_body.push(' dst=new this.ctor(' + ctor_params.join(',') + ');');
+		copy_body.push('}');
+		copy_body.push('objectdb.set(src,dst);');
+		for (var fi = 0; fi < config.fields.length; fi++) {
+			var field = config.fields[fi];
+			var field_type = 'generic';
+			if (Array.isArray(field)) {
+				field_type = field[1];
+				field = field[0];
+			}
+			switch (field_type) {
+				case 'direct':
+					copy_body.push('dst.' + field + '=src.'+field+';');
+					break;
+				case 'generic':
+					copy_body.push('dst.' + field + '=typeof src.'+field+' === "object" ? syncem.copyObject(dst.' + field + ', src.' + field + ', objectdb) : src.'+field+';');
+					break;
+				default:
+					throw "Unknown field type " + field_type;
+			}
+		}
+		copy_body.push('return dst;');
+		
+		gen_expansions[config.index] = {
+			copy: "function copy" + config.index + config.ctor.name + "(dst,src,objectdb) {\n\t" + copy_body.join("\n\t") + "}"
+		};
+//		config.copy = new Function('dst', 'src', 'objectdb', body.join("\n"));
+	}
+	if (config.fields) {
+		for (var fi = 0; fi < config.fields.length; fi++) {
+			if (Array.isArray(config.fields[fi])) {
+				config.fields[fi] = config.fields[fi][0];
+			}
+		}
+	}
+};
+
+syncem.finishExpansions = function(file) {
+	var idx,func;
+	var fs = require('fs');
+	var out = fs.openSync(file, 'w');
+	fs.writeSync(out, '(function(syncem_expansions) {');
+	for (idx in gen_expansions) {
+		var s = [];
+		for (func in gen_expansions[idx]) {
+			s.push(func+':'+gen_expansions[idx][func]);
+		}
+		fs.writeSync(out, 'syncem_expansions[' + idx + ']={' + s.join(",\n") + "};\n");
+	}
+	fs.writeSync(out, "})(typeof exports === 'undefined' ? this['syncem_expansions']={}: exports);");
+	fs.closeSync(out);
+	var syncem_expansions = require(file);
+	for (idx in syncem_expansions) {
+		for (func in syncem_expansions[idx]) {
+			registrationsByIndex[idx][func] = syncem_expansions[idx][func];
+		}
+	}
 };
 
 syncem.uniqSeed = new Date().getTime().toString(36) + '-' + ((Math.random() * 60466176)|0).toString(36);
@@ -228,7 +303,7 @@ function copyObject(dst, src, objectdb) {
 //	indent += ' ';
 //	console.log(indent + "copying object: " + src);
 	var top_level = objectdb == null;
-	if (objectdb == null) {
+	if (top_level) {
 //		var t0 = new Date().getTime();
 		objectdb = ObjectMapper.create();
 	}
@@ -266,36 +341,38 @@ function copyObject(dst, src, objectdb) {
 		}
 		else {
 			var config;
-			if (src.constructor in registrationsByConstructor) {
-				config = registrationsByConstructor[src.constructor];
-			}
-			else if (src.constructor in registrationsByIndex) {
-				config = registrationsByIndex[src.constructor];
+			if (src.constructor.$syncemclassid != null) {
+				config = registrationsByIndex[src.constructor.$syncemclassid];
 			}
 			if (config) {
-				if (!dst || src.constructor !== dst.constructor) {
-					if (config.ctor_args) {
-						var params = [];
-						for (var argIndex = 0; argIndex < config.ctor_args.length ; argIndex++) {
-							var arg_field = config.ctor_args[argIndex]
-							var arg_value;
-							if (arg_field in src) {
-								arg_value = src[arg_field];
-							}
-							params.push(arg_value);
-						}
-						//Need to be able to call constructors with specific deserialized parameters.... !?
-						dst = Object.create(config.ctor.prototype);
-						var ctor_output = config.ctor.apply(dst, params);
-						if (Object(ctor_output) === ctor_output) {
-							dst = ctor_output;
-						}
-					}
-					else {
-						dst = new config.ctor();
-					}
+				if (config.copy) {
+					dst = config.copy(dst,src,objectdb);
 				}
-				copyFieldsWithConfig(dst, src, config, objectdb);
+				else {
+					if (!dst || src.constructor !== dst.constructor) {
+						if (config.ctor_args) {
+							var params = [];
+							for (var argIndex = 0; argIndex < config.ctor_args.length ; argIndex++) {
+								var arg_field = config.ctor_args[argIndex]
+								var arg_value;
+								if (arg_field in src) {
+									arg_value = src[arg_field];
+								}
+								params.push(arg_value);
+							}
+							//Need to be able to call constructors with specific deserialized parameters.... !?
+							dst = Object.create(config.ctor.prototype);
+							var ctor_output = config.ctor.apply(dst, params);
+							if (Object(ctor_output) === ctor_output) {
+								dst = ctor_output;
+							}
+						}
+						else {
+							dst = new config.ctor();
+						}
+					}
+					copyFieldsWithConfig(dst, src, config, objectdb);
+				}
 			}
 			else {
 				dst = copyFields(dst, src, objectdb);
@@ -303,7 +380,7 @@ function copyObject(dst, src, objectdb) {
 		}
 	}
 	if (top_level) {
-//		console.log("Copy finished, used ", objectdb.objects.length, "objects. copy took " , new Date().getTime() - t0 , "ms; mem=", global.process != null ? process.memoryUsage() : '?');
+//		console.log("Copy finished, used ", objectdb.objects.length, "objects. copy took " , new Date().getTime() - t0 , "ms");
 		objectdb.discard();
 //		var serialized_dst = JSON.stringify(syncem.serialize(dst), null, ' ');
 //		if (serialized_dst != prev_serialized) {
@@ -320,6 +397,7 @@ function copyObject(dst, src, objectdb) {
 //	indent = indent.substr(0,indent.length - 1);
 	return dst;
 }
+syncem.copyObject = copyObject;
 //var prev_serialized = null;
 //var bcount = 0;
 
@@ -353,8 +431,10 @@ function serialize(input, objectdb) {
 		output = {r:payload};
 //		console.log("Outputting already-serialized ", output);
 	}
-	else if (input.constructor in registrationsByConstructor) {
-		var config = registrationsByConstructor[input.constructor];
+//	else if (input.constructor in registrationsByConstructor) {
+	else if (input.constructor.$syncemclassid != null) {
+//		var config = registrationsByConstructor[input.constructor];
+		var config = registrationsByIndex[input.constructor.$syncemclassid];
 		var fieldName;
 		payload = {};
 		var entry = {};
@@ -492,8 +572,9 @@ function deserialize(input, objectdb_in, objectdb_out) {
 		}
 		for (var type in input) {
 			var payload = input[type];
-			if (type in registrationsByIndex) {
-				var config = registrationsByIndex[type];
+			var n_type = parseInt(type, 10);
+			if (!isNaN(n_type)) {
+				var config = registrationsByIndex[n_type];
 				if (config.ctor_args) {
 					var params = [];
 					for (var argIndex = 0; argIndex < config.ctor_args.length ; argIndex++) {
@@ -739,11 +820,16 @@ function SyncRoot() {
 SyncRoot.prototype = new SyncOb();
 SyncRoot.prototype.constructor = SyncRoot;
 syncem.SyncRoot = SyncRoot;
-syncem.registerClass({'not':['moves']}, SyncRoot);
+syncem.registerClass(SyncRoot, {'not':['moves']});
 	
 SyncRoot.prototype.applyMoves = function() {
+	var moveIds = [];
 	for (var moveId in this.moves) {
-		this.moves[moveId].apply(this);
+		moveIds.push(moveId);
+	}
+	moveIds.sort();
+	for (var i = 0 ; i < moveIds.length; i++) {
+		this.moves[moveIds[i]].apply(this);
 	}
 };
 
@@ -753,8 +839,13 @@ SyncRoot.prototype.updateObjects = function() {
 //		n_objects ++;
 //	}
 //	console.log("Updating SyncRoot with ", n_objects, " objects");
-	for (var objId in this.objects) {
-		this.objects[objId].update(this);
+	var objectIds = [];
+	for (var objectId in this.objects) {
+		objectIds.push(objectId);
+	}
+	objectIds.sort();
+	for (var i = 0; i < objectIds.length ; i++) {
+		this.objects[objectIds[i]].update(this);
 	}
 };
 
@@ -776,7 +867,8 @@ SyncRoot.prototype.update = function() {
 
 SyncRoot.prototype.getAsInitial = function() {
 	var out = {};
-	var config = registrationsByConstructor[this.constructor];
+//	var config = registrationsByConstructor[this.constructor];
+	var config = registrationsByIndex[this.constructor.$syncemclassid];
 	out.constructor = config.index;
 	copyFieldsWithConfig(out, this, config);
 	return out;
