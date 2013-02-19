@@ -333,7 +333,8 @@ function copyObject(dst, src, objectdb) {
 			else {
 				dst = new src.constructor(src.length);
 			}
-			objectdb.set(src, dst);
+			//Setting custom properties on array buffers breaks in firefox.
+//			objectdb.set(src, dst);
 			dst.set(src);
 		}
 		else if (Array.isArray(src)) {
@@ -414,11 +415,12 @@ function serialize(input, objectdb) {
 		payload = [];
 		payload.length = input.length;
 		entry[type] = payload;
-		output = {r:objectdb.set(input, entry)};
+//		output = {r:objectdb.set(input, entry)};
 		for (var index = 0 ; index < input.length; index++) {
 //			console.log("Serializing array ", type, "[", index, "]:", input[index]);
 			payload[index] = serialize(input[index], objectdb);
 		}
+		output = entry;
 	}
 	
 	if (input === undefined) {
@@ -495,13 +497,6 @@ function serialize(input, objectdb) {
 	else if (global.Float64Array && input instanceof global.Float64Array) {
 		serializeArray('af64');
 	}
-//	else if (global.ArrayBuffer && input instanceof global.ArrayBuffer) {
-//		payload = [];
-//		output = {r:objectdb.set(input, {af:payload})};
-//		for (var index = 0 ; index < input.length; index++) {
-//			payload[index] = serialize(input[index], objectdb);
-//		}
-//	}
 	else if (Array.isArray(input)) {
 		payload = [];
 		payload.length = input.length;
