@@ -916,15 +916,7 @@ Syncer.prototype.startInterval = function() {
 	console.log("startInterval with time ", new Date(syncer.start_time));
 	var interval_ms = 1000 / this.config.lps;
 	this.interval = setInterval(function() {
-		var t0 = new Date().getTime();
-//		console.log("Updating at ", t0);
 		syncer.update();
-		var time_taken = new Date().getTime() - t0;
-		if (time_taken >= interval_ms) {
-			console.warn("syncer.update took " + time_taken + "ms (interval is " + interval_ms + "ms)");
-		}
-//		console.log("Updating at ", t0);
-//		console.warn("Update took ", time_taken, " (want ", interval_ms, ")");
 	}, interval_ms);
 };
 
@@ -1041,6 +1033,10 @@ Syncer.prototype.update = function() {
 		if (this.onUpdate) {
 			this.onUpdate();
 		}
+	}
+	now_tick = this.getNowTick();
+	if (this.dirty_tick + 1 < now_tick)  {
+		console.warn("Falling behind! Updated to " + this.tick + ", but need to be at " + now_tick);
 	}
 };
 //var replays_written = 0;
