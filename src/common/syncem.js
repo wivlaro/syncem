@@ -415,6 +415,7 @@ function serialize(input, objectdb) {
 		payload = [];
 		payload.length = input.length;
 		entry[type] = payload;
+		//Firefox doesn't allow you to set custom parameters on array buffers
 //		output = {r:objectdb.set(input, entry)};
 		for (var index = 0 ; index < input.length; index++) {
 //			console.log("Serializing array ", type, "[", index, "]:", input[index]);
