@@ -161,7 +161,8 @@ ObjectMapper.prototype.set = function(k, v) {
 	return k.$syncemid;
 };
 ObjectMapper.prototype.get = function(k) {
-	return k.$syncemid && this.objects[k.$syncemid].v;
+	var id = k.$syncemid;
+	return id && this.objects[id].v;
 };
 ObjectMapper.prototype.getIndex = function(k) {
 	return k.$syncemid;
@@ -317,29 +318,6 @@ function copyObject(dst, src, objectdb) {
 			dst = found;
 //			console.log("Found " + src.$syncemid + " in copy db");
 		}
-		else if ((global.Uint8Array && src instanceof global.Uint8Array) 
-			|| (global.Uint16Array && src instanceof global.Uint16Array) 
-			|| (global.Uint32Array && src instanceof global.Uint32Array) 
-			|| (global.Int8Array && src instanceof global.Int8Array) 
-			|| (global.Int16Array && src instanceof global.Int16Array) 
-			|| (global.Int32Array && src instanceof global.Int32Array) 
-			|| (global.FloatArray && src instanceof global.FloatArray) 
-			|| (global.Float32Array && src instanceof global.Float32Array) 
-			|| (global.DoubleArray && src instanceof global.DoubleArray) 
-			|| (global.Float64Array && src instanceof global.Float64Array)) {
-			if (dst != null && src.constructor === dst.constructor && src.length === dst.length) {
-				dst.length = src.length;
-			}
-			else {
-				dst = new src.constructor(src.length);
-			}
-			//Setting custom properties on array buffers breaks in firefox.
-//			objectdb.set(src, dst);
-			dst.set(src);
-		}
-		else if (Array.isArray(src)) {
-			dst = copyArray(dst, src, objectdb);
-		}
 		else {
 			var config;
 			if (src.constructor.$syncemclassid != null) {
@@ -374,6 +352,27 @@ function copyObject(dst, src, objectdb) {
 					}
 					copyFieldsWithConfig(dst, src, config, objectdb);
 				}
+			}
+			else if (Array.isArray(src)) {
+				dst = copyArray(dst, src, objectdb);
+			}
+			else if ((src.constructor === Uint8Array) 
+				|| (src.constructor === Uint16Array) 
+				|| (src.constructor === Uint32Array) 
+				|| (src.constructor === Int8Array) 
+				|| (src.constructor === Int16Array) 
+				|| (src.constructor === Int32Array) 
+				|| (src.constructor === Float32Array) 
+				|| (src.constructor === Float64Array)) {
+				if (dst != null && src.constructor === dst.constructor && src.length === dst.length) {
+					dst.length = src.length;
+				}
+				else {
+					dst = new src.constructor(src.length);
+				}
+				//Setting custom properties on array buffers breaks in firefox.
+	//			objectdb.set(src, dst);
+				dst.set(src);
 			}
 			else {
 				dst = copyFields(dst, src, objectdb);
