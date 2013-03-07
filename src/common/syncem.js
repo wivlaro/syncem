@@ -957,7 +957,17 @@ Syncer.prototype.addMove = function(move, allowFuture) {
 Syncer.prototype.getNowTick = function() {
 	var now = new Date().getTime();
 	return (now - this.start_time) * this.config.lps / 1000;
-}
+};
+
+Syncer.prototype.getStartTime = function(current_tick, ms_ago) {
+	return new Date().getTime() - current_tick * 1000 / this.config.lps - ms_ago;
+};
+
+Syncer.prototype.adjustNowTick = function(peer_current_tick, ms_ago) {
+	var target_start_time = this.getStartTime(peer_current_tick, ms_ago);
+	console.log("Start time difference:", target_start_time - this.start_time);
+	this.start_time += (target_start_time - this.start_time) * 0.5;
+};
 
 Syncer.prototype.update = function() {
 	var now_tick = this.getNowTick();
@@ -1086,7 +1096,7 @@ syncem.Syncer.createFromSetup = function(setup, round_trip_time) {
 	syncer.config.history_size *= 2;
 	syncer.states[setup.oldest.tick % syncer.config.history_size] = setup.oldest;
 	syncer.tick = syncer.dirty_tick = setup.oldest.tick;
-	syncer.start_time = new Date().getTime() - setup.current_tick * 1000 / syncer.config.lps - round_trip_time / 2;
+	syncer.start_time = syncer.getStartTime(setup.current_tick, round_trip_time / 2);
 	syncer.queuedMoves = setup.moves;
 	syncer.update();
 	syncer.startInterval();
