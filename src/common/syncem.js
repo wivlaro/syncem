@@ -1081,12 +1081,12 @@ Syncer.prototype.getSetup = function() {
 	};
 };
 
-syncem.Syncer.createFromSetup = function(setup) {
+syncem.Syncer.createFromSetup = function(setup, round_trip_time) {
 	var syncer = new syncem.Syncer(setup.config);
 	syncer.config.history_size *= 2;
 	syncer.states[setup.oldest.tick % syncer.config.history_size] = setup.oldest;
 	syncer.tick = syncer.dirty_tick = setup.oldest.tick;
-	syncer.start_time = new Date().getTime() - setup.current_tick * 1000 / syncer.config.lps;
+	syncer.start_time = new Date().getTime() - setup.current_tick * 1000 / syncer.config.lps - round_trip_time / 2;
 	syncer.queuedMoves = setup.moves;
 	syncer.update();
 	syncer.startInterval();
