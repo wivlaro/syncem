@@ -287,7 +287,7 @@ function copyFields(dst, src, objectdb) {
 	var fieldName;
 	for (fieldName in src) {
 		if (fieldName !== '$syncemid') {
-			copyOffset(dst, src, fieldName, objectdb)
+			copyOffset(dst, src, fieldName, objectdb);
 		}
 	}
 	for (fieldName in dst) {
@@ -429,7 +429,7 @@ function serialize(input, objectdb) {
 	else if (input === null) {
 		output = {x:0};
 	}
-	else if (typeof input == 'object' && (payload = objectdb.getIndex(input)) !== undefined) {
+	else if (typeof input === 'object' && (payload = objectdb.getIndex(input)) !== undefined) {
 		output = {r:payload};
 //		console.log("Outputting already-serialized ", output);
 	}
@@ -446,7 +446,7 @@ function serialize(input, objectdb) {
 			for (var fieldIndex = 0; fieldIndex < config.fields.length; fieldIndex++) {
 				fieldName = config.fields[fieldIndex];
 				if (fieldName in input) {
-					if (typeof input[fieldName] != 'function' && fieldName !== '$syncemid') {
+					if (typeof input[fieldName] !== 'function' && fieldName !== '$syncemid') {
 						payload[fieldName] = serialize(input[fieldName], objectdb);
 					}
 				}
@@ -454,14 +454,14 @@ function serialize(input, objectdb) {
 		}
 		else if (config.not) {
 			for (fieldName in input) {
-				if (!(fieldName in config.not) && typeof input[fieldName] != 'function' && fieldName !== '$syncemid') {
+				if (!(fieldName in config.not) && typeof input[fieldName] !== 'function' && fieldName !== '$syncemid') {
 					payload[fieldName] = serialize(input[fieldName], objectdb);
 				}
 			}
 		}
 		else {
 			for (fieldName in input) {
-				if (typeof input[fieldName] != 'function' && fieldName !== '$syncemid') {
+				if (typeof input[fieldName] !== 'function' && fieldName !== '$syncemid') {
 					payload[fieldName] = serialize(input[fieldName], objectdb);
 				}
 			}
