@@ -14,7 +14,7 @@ syncem.registerClass = function(ctor, config) {
 			fields: config
 		};
 	}
-	else if (typeof config == 'object') {
+	else if (typeof config === 'object') {
 		if (config.not) {
 			if (Array.isArray(config.not)) {
 				var objectNot = {};
@@ -515,7 +515,7 @@ function serialize(input, objectdb) {
 		}
 		output = {r:objectdb.set(input, {o:payload})};
 		for (fieldName in input) {
-			if (typeof input[fieldName] != 'function' && fieldName !== '$syncemid') {
+			if (typeof input[fieldName] !== 'function' && fieldName !== '$syncemid') {
 				payload[fieldName] = serialize(input[fieldName], objectdb);
 			}
 		}
