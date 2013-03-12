@@ -193,10 +193,6 @@ SyncRoot.prototype.getAsInitial = function() {
 	out.constructor = config.index;
 	copyFieldsWithConfig(out, this, config);
 	return out;
-}
-
-SyncRoot.prototype.getCheckString = function() {
-	return JSON.stringify(serialize(this)) + JSON.stringify(serialize(this.moves));
 };
 
 
