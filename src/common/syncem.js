@@ -428,10 +428,20 @@ SetupPacket.prototype.createSyncer = function() {
 	return syncer;
 };
 
-function simpleChecksum(str) {
+function simpleChecksum(d) {
 	var checksum = 0;
-	for (var i=0 ; i < str.length ; i++) {
-		checksum = str.charCodeAt(i) ^ (checksum << 5) ^ (checksum >>> 27);
+	if (typeof d === 'string') {
+		for (var i=0 ; i < d.length ; i++) {
+			checksum = d.charCodeAt(i) ^ (checksum << 5) ^ (checksum >>> 27);
+		}
+	}
+	else {
+		if (d.constructor === ArrayBuffer) {
+			d = new Uint8Array(d);
+		}
+		for (var i=0 ; i < d.length ; i++) {
+			checksum = d[i] ^ (checksum << 5) ^ (checksum >>> 27);
+		}
 	}
 	return checksum;
 }
