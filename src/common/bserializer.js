@@ -147,7 +147,7 @@ if (have_BufferPacket) {
 	BufferPacket.prototype.writeFloat64= function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeDoubleBE (value, this.offset  , true); this.offset += 8; };
 	
 	BufferPacket.prototype.getDelivery = function() {
-		console.log("getDelivery to ",this.offset," length=",this.impl.length," of ",this.impl);
+//		console.log("getDelivery to ",this.offset," length=",this.impl.length," of ",this.impl);
 		var result = new Buffer(this.offset);
 		this.impl.copy(result, 0, 0, this.offset);
 		return result;
@@ -250,6 +250,26 @@ PrimitiveConfig.prototype.copy = function(src) {
 	return src;
 };
 
+PrimitiveConfig.prototype.makeExpansions = function() {
+	var templates = {
+		write: [
+			"function write#TYPE#(p, src) {",
+			"	p.write#TYPE#(src);",
+			"}"],
+		read: [
+			"function read#TYPE#(p) {",
+			"	return p.read#TYPE#();",
+			"}"]
+	};
+	
+	var expansions = {};
+	for (var fname in templates) {
+		expansions[fname] = templates[fname].join("\n\t").replace(/#TYPE#/g, this.name.charAt(0).toUpperCase() + this.name.slice(1));
+	}
+	return expansions;
+};
+
+
 function ObjectConfig(config) {
 	BaseConfig.call(this, config.name);
 	
@@ -311,11 +331,17 @@ ObjectConfig.prototype.write = function(p, src, objectdb) {
 	}
 	this.writeFields(p, src, objectdb);
 };
+var indent = [];
 ObjectConfig.prototype.writeCtorArgs = function (p, src, objectdb) {
 	if (this.ctor_args) {
 		for (var idx = 0; idx < this.ctor_args.length ; idx ++ ) {
-			var arg_field = this.ctor_args[idx];
-			writeGeneric(p, src[arg_field], objectdb);
+			var f = this.ctor_args[idx];
+//			var start = p.offset;
+//			console.log(indent.join(' ') + 'writing '+f+' @'+start);
+//			indent.push('');
+			writeGeneric(p, src[f], objectdb);
+//			indent.pop();
+//			console.log(indent.join(' ') + 'wrote '+f+' @'+p.offset+' in '+(p.offset-start));
 		}
 	}
 };
@@ -325,7 +351,13 @@ ObjectConfig.prototype.writeFields = function (p, src, objectdb) {
 		for (var i = 0, l = this.fields.length; i < l; i++) {
 			var field = this.fields[i];
 			if (!(this.ctor_args && this.ctor_args.indexOf(field.name) !== -1)) {
-				writeGeneric(p, src[field.name], objectdb);
+				var f = field.name;
+//				var start = p.offset;
+//				console.log(indent.join(' ') + 'writing '+f+' @'+start);
+//				indent.push('');
+				writeGeneric(p, src[f], objectdb);
+//				indent.pop();
+//				console.log(indent.join(' ') + 'wrote '+f+' @'+p.offset+' in '+(p.offset-start));
 			}
 		}
 	}
@@ -340,7 +372,12 @@ ObjectConfig.prototype.writeFields = function (p, src, objectdb) {
 		for (var f in src) {
 			if (f !== '$bserializer_writeIndex' && typeof src[f] !== 'function' && !(this.not && (f in this.not)) && !(this.ctor_args && this.ctor_args.indexOf(f) !== -1)) {
 				p.writeString(f);
+//				var start = p.offset;
+//				isNaN(f) && console.log(indent.join(' ') + 'writing '+f+' @'+start);
+//				indent.push('');
 				writeGeneric(p, src[f], objectdb);
+//				indent.pop();
+//				isNaN(f) && console.log(indent.join(' ') + 'wrote '+f+' @'+p.offset+' in '+(p.offset-start));
 			}
 		}
 	}
@@ -364,7 +401,7 @@ ObjectConfig.prototype.read = function(p, dst, objectdb) {
 		if (b_already_written) {
 			var reference = p.readUint16();
 			dst = objectdb[reference];
-			console.log("read circular object @", reference, this.name || this.ctor.name || this.index);
+//			console.log("read circular object @", reference, this.name || this.ctor.name || this.index);
 			return dst;
 		}
 	}
@@ -396,7 +433,7 @@ ObjectConfig.prototype.read = function(p, dst, objectdb) {
 	}
 	if (this.circular) {
 		objectdb.push(dst);
-		console.log("read new circular ref @", reference, this.name || this.ctor.name || this.index);
+//		console.log("read new circular ref @", reference, this.name || this.ctor.name || this.index);
 	}
 	this.readFields(p, dst, objectdb);
 	return dst;
@@ -682,86 +719,15 @@ registerClass(new LiteralConfig('null', null));
 registerClass(new LiteralConfig('false', false));
 registerClass(new LiteralConfig('true', true));
 
-registerClass(new PrimitiveConfig('string', {
-	write: function(p, src) {
-		p.writeString(src);
-	},
-	read: function(p) {
-		return p.readString();
-	}
-}));
-
-registerClass(new PrimitiveConfig('float64', {
-	write: function(p, src) {
-		p.writeFloat64(src);
-	},
-	read: function(p) {
-		return p.readFloat64();
-	}
-}));
-
-registerClass(new PrimitiveConfig('int8', {
-	write: function(p, src) {
-		p.writeInt8(src);
-	},
-	read: function(p) {
-		return p.readInt8();
-	}
-}));
-
-registerClass(new PrimitiveConfig('uint8', {
-	write: function(p, src) {
-		p.writeUint8(src);
-	},
-	read: function(p) {
-		return p.readUint8();
-	}
-}));
-
-registerClass(new PrimitiveConfig('int16', {
-	write: function(p, src) {
-		p.writeInt16(src);
-	},
-	read: function(p) {
-		return p.readInt16();
-	}
-}));
-
-registerClass(new PrimitiveConfig('uint16', {
-	write: function(p, src) {
-		p.writeUint16(src);
-	},
-	read: function(p) {
-		return p.readUint16();
-	}
-}));
-
-registerClass(new PrimitiveConfig('int32', {
-	write: function(p, src) {
-		p.writeInt32(src);
-	},
-	read: function(p) {
-		return p.readInt32();
-	}
-}));
-
-registerClass(new PrimitiveConfig('uint32', {
-	write: function(p, src) {
-		p.writeUint32(src);
-	},
-	read: function(p) {
-		return p.readUint32();
-	}
-}));
-
-registerClass(new PrimitiveConfig('float32', {
-	write: function(p, src) {
-		p.writeFloat32(src);
-	},
-	read: function(p) {
-		return p.readFloat32();
-	}
-}));
+registerClass(new PrimitiveConfig('string'));
+registerClass(new PrimitiveConfig('float64'));
+registerClass(new PrimitiveConfig('int8'));
+registerClass(new PrimitiveConfig('uint8'));
+registerClass(new PrimitiveConfig('int16'));
+registerClass(new PrimitiveConfig('uint16'));
+registerClass(new PrimitiveConfig('int32'));
+registerClass(new PrimitiveConfig('uint32'));
+registerClass(new PrimitiveConfig('float32'));
 
 registerClass(new ObjectConfig({name:'object', noAnnotate:true, noExpand:true}));
 registerClass(new ArrayConfig('array'));
@@ -774,6 +740,37 @@ registerClass(new TypedArrayConfig("Int32"));
 registerClass(new TypedArrayConfig("Uint32"));
 registerClass(new TypedArrayConfig("Float32"));
 registerClass(new TypedArrayConfig("Float64"));
+
+//registerClass(ArrayBuffer, {
+//	noAnnotate:true,
+//	copy: function(dst, src) {
+//		if (dst != null && dst instanceof ArrayBuffer) {
+//			new Uint8Array(dst).set(new Uint8Buffer(src));
+//		}
+//		else {
+//			dst = src.slice(0);
+//		}
+//		return dst;
+//	},
+//	write: function(p, src) {
+//		var view = Uint8Array(src);
+//		p.writeUint32(view.length);
+//		for (var i = 0, l = view.length; i < l ; i++) {
+//			p.writeUint8(view[i]);
+//		}
+//	},
+//	read: function(p, dst) {
+//		var l = p.readUint32(view.length);
+//		if (dst == null || !(dst instanceof ArrayBuffer)) {
+//			dst = new ArrayBuffer(l);
+//		}
+//		var view = Uint8Array(dst);
+//		for (var i = 0, l = view.length; i < l ; i++) {
+//			p.writeUint8(view[i]);
+//		}
+//		return dst;
+//	}
+//});
 
 
 bserializer.finishExpansions = function(file) {
@@ -908,8 +905,10 @@ function detectConfig(src) {
 			else {
 				get_config: {
 					for (var i = 0, l = unannotatedRegistrations.length; i < l; i++) {
-						if (unannotatedRegistrations[i].type === src.constructor) {
-							config = unannotatedRegistrations[l];
+//						src.constructor !== Object && src.constructor !== Array &&
+//						console.log("Checking constructor ", src.constructor, unannotatedRegistrations[i].ctor);
+						if (src.constructor === unannotatedRegistrations[i].ctor) {
+							config = unannotatedRegistrations[i];
 							break get_config;
 						}
 					}
