@@ -281,6 +281,11 @@ Syncer.prototype.getNowTick = function() {
 	return (now - this.start_time) * this.config.lps / 1000;
 };
 
+Syncer.prototype.needsUpdate = function() {
+	var now_tick = this.getNowTick();
+	return this.dirty_tick < now_tick;
+};
+
 Syncer.prototype.update = function() {
 	var now_tick = this.getNowTick();
 //	console.log("Updating ", this.dirty_tick, "->", now_tick);
