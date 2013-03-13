@@ -246,7 +246,7 @@ function PrimitiveConfig(name, config) {
 PrimitiveConfig.prototype = new BaseConfig();
 PrimitiveConfig.prototype.constructor = PrimitiveConfig;
 
-PrimitiveConfig.prototype.copy = function(src) {
+PrimitiveConfig.prototype.copy = function(dst, src) {
 	return src;
 };
 
