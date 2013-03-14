@@ -352,9 +352,10 @@ ObjectConfig.prototype.write = function(p, src, objectdb) {
 			objectdb.push(src);
 		}
 	}
+	this.writeCtorArgs(p, src, objectdb);
 	this.writeFields(p, src, objectdb);
 };
-var indent = [];
+//var indent = [];
 ObjectConfig.prototype.writeCtorArgs = function (p, src, objectdb) {
 	if (this.ctor_args) {
 		for (var idx = 0; idx < this.ctor_args.length ; idx ++ ) {
@@ -369,7 +370,6 @@ ObjectConfig.prototype.writeCtorArgs = function (p, src, objectdb) {
 	}
 };
 ObjectConfig.prototype.writeFields = function (p, src, objectdb) {
-	this.writeCtorArgs(p, src, objectdb);
 	if (this.fields != null) {
 		for (var i = 0, l = this.fields.length; i < l; i++) {
 			var field = this.fields[i];
