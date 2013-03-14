@@ -11,7 +11,7 @@ Packet.prototype.getDelivery = function() {
 
 var PACKET_DEBUG = false;
 
-Packet.prototype.readBoolean = function() { return this.readUint8() != 0; };
+Packet.prototype.readBoolean = function() { return this.readUint8() !== 0; };
 Packet.prototype.writeBoolean = function(value) { this.writeUint8(value ? 1 : 0); };
 
 Packet.prototype.readInt8   = function() { var value = this.impl.getInt8   (this.offset); this.offset++;    PACKET_DEBUG && console.log("Read ",value); return value; };
@@ -137,12 +137,12 @@ if (have_BufferPacket) {
 	BufferPacket.prototype.readFloat32= function() { var value = this.impl.readFloatBE  (this.offset); this.offset += 4; PACKET_DEBUG && console.log("Read ",value); return value; };
 	BufferPacket.prototype.readFloat64= function() { var value = this.impl.readDoubleBE (this.offset); this.offset += 8; PACKET_DEBUG && console.log("Read ",value); return value; };
 	
-	BufferPacket.prototype.writeInt8   = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeInt8     (value, this.offset++, true); };
-	BufferPacket.prototype.writeUint8  = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeUInt8    (value, this.offset++, true); };
-	BufferPacket.prototype.writeInt16  = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeInt16BE  (value, this.offset  , true); this.offset += 2; };
-	BufferPacket.prototype.writeUint16 = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeUInt16BE (value, this.offset  , true); this.offset += 2; };
-	BufferPacket.prototype.writeInt32  = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeInt32BE  (value, this.offset  , true); this.offset += 4; };
-	BufferPacket.prototype.writeUint32 = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeUInt32BE (value, this.offset  , true); this.offset += 4; };
+	BufferPacket.prototype.writeInt8   = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeInt8     (value, this.offset++); };
+	BufferPacket.prototype.writeUint8  = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeUInt8    (value, this.offset++); };
+	BufferPacket.prototype.writeInt16  = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeInt16BE  (value, this.offset  ); this.offset += 2; };
+	BufferPacket.prototype.writeUint16 = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeUInt16BE (value, this.offset  ); this.offset += 2; };
+	BufferPacket.prototype.writeInt32  = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeInt32BE  (value, this.offset  ); this.offset += 4; };
+	BufferPacket.prototype.writeUint32 = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeUInt32BE (value, this.offset  ); this.offset += 4; };
 	BufferPacket.prototype.writeFloat32= function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeFloatBE  (value, this.offset  , true); this.offset += 4; };
 	BufferPacket.prototype.writeFloat64= function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeDoubleBE (value, this.offset  , true); this.offset += 8; };
 	
@@ -228,6 +228,9 @@ function LiteralConfig(name, value) {
 }
 LiteralConfig.prototype = new BaseConfig();
 LiteralConfig.prototype.constructor = LiteralConfig;
+LiteralConfig.prototype.makeTypeCheck = function(variable) {
+	return variable + ' === ' + this.value;
+};
 LiteralConfig.prototype.read = function () {
 	return this.value;
 };
@@ -235,6 +238,12 @@ LiteralConfig.prototype.write = function () {
 };
 LiteralConfig.prototype.copy = function () {
 	return this.value;
+};
+LiteralConfig.prototype.makeWriteFieldExpansion = function() {
+	return '';
+};
+LiteralConfig.prototype.makeReadFieldExpansion = function(dst) {
+	return dst + ' = ' + this.value + ';';
 };
 
 function PrimitiveConfig(name, config) {
@@ -248,6 +257,20 @@ PrimitiveConfig.prototype.constructor = PrimitiveConfig;
 
 PrimitiveConfig.prototype.copy = function(dst, src) {
 	return src;
+};
+
+PrimitiveConfig.prototype.makeTypeCheck = function (variable) {
+	return "typeof " + variable + " === 'number'";
+};
+PrimitiveConfig.prototype.makeWriteFieldExpansion = function(src) {
+	return "p.write" + this.typeCapitalised() + "(" + src + ");";
+};
+PrimitiveConfig.prototype.makeReadFieldExpansion = function(dst) {
+	return dst + " = p.read" + this.typeCapitalised() + "();";
+};
+
+PrimitiveConfig.prototype.typeCapitalised = function() {
+	return this.name.charAt(0).toUpperCase() + this.name.slice(1);
 };
 
 PrimitiveConfig.prototype.makeExpansions = function() {
@@ -264,7 +287,7 @@ PrimitiveConfig.prototype.makeExpansions = function() {
 	
 	var expansions = {};
 	for (var fname in templates) {
-		expansions[fname] = templates[fname].join("\n\t").replace(/#TYPE#/g, this.name.charAt(0).toUpperCase() + this.name.slice(1));
+		expansions[fname] = templates[fname].join("\n\t").replace(/#TYPE#/g, this.typeCapitalised());
 	}
 	return expansions;
 };
@@ -527,30 +550,56 @@ ObjectConfig.prototype.copyFields = function (dst, src, objectdb) {
 };
 
 ObjectConfig.prototype.makeExpansions = function() {
-	var copy_body = [];
-//	copy_body.push("console.trace();");
+	var bodies = {
+		copy:[],
+		writeFields:[],
+		readFields:[]
+	};
 	
 	if (this.circular) {
-		copy_body.push('var dst_orig = this.getCopyCircular(dst, src, objectdb);');
-		copy_body.push("if (typeof dst_orig !== 'undefined') return dst_orig;");
+		bodies.copy.push('var dst_orig = this.getCopyCircular(dst, src, objectdb);');
+		bodies.copy.push("if (typeof dst_orig !== 'undefined') return dst_orig;");
 	}
 
 	function for_each(a, f) {
-		for (var i = 0, l = a.length; i < l; i++) {
-			f(a[i]);
-		}
+		for (var i = 0, l = a.length; i < l; i++) f(a[i]);
+	}
+	function map(a, f) {
+		var r = []; r.length = a.length;
+		for (var i = 0, l = a.length; i < l; i++) r[i] = f(a[i]);
+		return r;
 	}
 	function output_copy_direct(field) {
-		copy_body.push('dst.' + field.name + ' = src.' + field.name + ';');
+		bodies.copy.push('dst.' + field.name + ' = src.' + field.name + ';');
 	}
 	function output_copy_generic(field) {
-		copy_body.push('dst.' + field.name + ' = bserializer.copyGeneric(dst.' + field.name + ', src.' + field.name + ', objectdb);');
+		bodies.copy.push('dst.' + field.name + ' = bserializer.copyGeneric(dst.' + field.name + ', src.' + field.name + ', objectdb);');
 	}
+	
+	function get_field_config(field_type) {
+		var config;
+		if (field_type.$bserializerclassid in registrationsByIndex) {
+			config = registrationsByIndex[field_type.$bserializerclassid];
+		}
+		else if (field_type in registrationsByName) {
+			config = registrationsByName[field_type];
+		}
+		return config;
+	}
+	
 	function output_copy_by_type(field) {
 		if (field.type.$bserializerclassid in registrationsByIndex) {
 			output_copy_generic(field);
 		}
-		else {
+//		else if (Array.isArray(field.type)) {
+//			for (var i = 0, l = field.type.length; i < l; i++) {
+//				var config = get_field_config(field.type[i]);
+//				bodies.writeFields.push((i > 0 ? 'else if' : 'if') + " (" + config.makeTypeCheck("src." + field.name) + ") {");
+//				bodies.writeFields.push("\t" + config.makeCopyFieldExpansion(field.name));
+//				bodies.writeFields.push("}");
+//			}
+//		}
+		else if (typeof field.type === 'string') {
 			switch (field.type) {
 				case 'boolean':
 				case 'int8':
@@ -574,7 +623,7 @@ ObjectConfig.prototype.makeExpansions = function() {
 		}
 	}
 
-	copy_body.push('if (dst == null) {');
+	bodies.copy.push('if (dst == null) {');
 	var ctor_params = [];
 	if (this.ctor_args) {
 		for (var ci = 0 ; ci < this.ctor_args.length; ci++) {
@@ -582,7 +631,7 @@ ObjectConfig.prototype.makeExpansions = function() {
 		}
 	}
 
-	copy_body.push('	dst=new this.ctor(' + ctor_params.join(',') + ');');
+	bodies.copy.push('	dst=new this.ctor(' + ctor_params.join(',') + ');');
 	var any_static = false;
 	if (this.fields) {
 		for_each(this.fields, function(field) {
@@ -592,34 +641,116 @@ ObjectConfig.prototype.makeExpansions = function() {
 			}
 		});
 	}
-	copy_body.push('}');
+	bodies.copy.push('}');
 	if (any_static) {
-		copy_body.push('else {');
+		bodies.copy.push('else {');
 		for_each(this.fields, function(field) {
 			if (field.static) {
 				output_copy_direct(field);
 			}
 		});
-		copy_body.push('}');
+		bodies.copy.push('}');
 	}
 	if (this.circular) {
-		copy_body.push('this.setCopyCircular(dst, src, objectdb);');
+		bodies.copy.push('this.setCopyCircular(dst, src, objectdb);');
+	}
+	var read_write_written = {};
+	function output_field_read_write(writes, reads, field, ctor_mode) {
+		if (field.name in read_write_written) return;
+		read_write_written[field.name] = true;
+		var write_src = 'src.' + field.name;
+		var read_dst;
+		if (ctor_mode) {
+			read_dst = '_dst_' + field.name;
+			reads.push('var ' + read_dst + ';');
+			reads.push('if (dst != null) ' + read_dst + ' = dst.' + field.name);
+		}
+		else {
+			read_dst = 'dst.' + field.name;
+		}
+		if (Array.isArray(field.type)) {
+			var configs = map(field.type, get_field_config);
+			reads.push('switch (p.readUint8()) {');
+			for (var i = 0, l = configs.length; i < l; i++) {
+				writes.push((i > 0 ? 'else if' : 'if') + " (" + configs[i].makeTypeCheck(write_src) + ") {");
+				writes.push("\tp.writeUint8(" + i + ");");
+				writes.push("\t" + configs[i].makeWriteFieldExpansion(write_src));
+				writes.push("}");
+
+				reads.push('\tcase ' + i + ':');
+				reads.push("\t\t" + configs[i].makeReadFieldExpansion(read_dst));
+				reads.push("\t\tbreak;");
+			}
+
+			writes.push("else {");
+			writes.push("\tthrow 'Unhandled type on write';");
+			writes.push('}');
+
+			reads.push("\tdefault:");
+			reads.push("\t\tthrow 'Unhandled type on read';");
+			reads.push('}');
+		}
+		else {
+			var config = get_field_config(field.type);
+			if (config && config.makeWriteFieldExpansion && config.makeReadFieldExpansion) {
+				writes.push(config.makeWriteFieldExpansion(write_src));
+				reads.push(config.makeReadFieldExpansion(read_dst));
+			}
+			else {
+				writes.push("bserializer.writeGeneric(p, " + write_src + ", objectdb);");
+				reads.push(read_dst + " = bserializer.readGeneric(p, " + read_dst + ", objectdb);");
+			}
+		}
+		return read_dst;
+	}
+	if (this.ctor_args) {
+		var fields = this.fields;
+		bodies.writeCtorArgs = [];
+		bodies.readCtorArgs = [];
+		var read_dsts = map(this.ctor_args, function (ctor_arg_name) {
+			var read_dst;
+			if (fields) {
+				for (var i = 0, l = fields.length; i < l; i++) {
+					var field = fields[i];
+					if (field === ctor_arg_name || field.name === ctor_arg_name) {
+						read_dst = output_field_read_write(bodies.writeCtorArgs, bodies.readCtorArgs, field, true);
+						break;
+					}
+				}
+			}
+			if (typeof read_dst === 'undefined') {
+				read_dst = output_field_read_write(bodies.writeCtorArgs, bodies.readCtorArgs, {name:ctor_arg_name, type:'generic'}, true);
+			}
+			return read_dst;
+		});
+		bodies.readCtorArgs.push('return [' + read_dsts.join(',') + '];');
 	}
 	if (this.fields) {
 		for_each(this.fields, function(field) {
 			if (!field.static) {
 				output_copy_by_type(field);
 			}
+			output_field_read_write(bodies.writeFields, bodies.readFields, field);
 		});
 	}
 	else {
-		copy_body.push('this.copyFields(dst, src, objectdb);');
+		bodies.copy.push('this.copyFields(dst, src, objectdb);');
 	}
-	copy_body.push('return dst;');
+	bodies.copy.push('return dst;');
 //	console.log("Expanding copy for ", this);
-	return {
-		copy: "function copy" + this.index + this.ctor.name + "(dst,src,objectdb) {\n\t\t" + copy_body.join("\n\t\t") + "}"
+	var function_suffix = this.index + this.ctor.name;
+	var expansions ={
+		copy: "function copy" + function_suffix + "(dst,src,objectdb) {\n\t\t" + bodies.copy.join("\n\t\t") + "}"
 	};
+	if (this.ctor_args) {
+		expansions.writeCtorArgs = "function writeCtorArgs" + function_suffix + "(p,src,objectdb) {\n\t\t" + bodies.writeCtorArgs.join("\n\t\t") + "}";
+		expansions.readCtorArgs = "function readCtorArgs" + function_suffix + "(p,dst,objectdb) {\n\t\t" + bodies.readCtorArgs.join("\n\t\t") + "}";
+	}
+	if (this.fields) {
+		expansions.writeFields = "function writeFields" + function_suffix + "(p,src,objectdb) {\n\t\t" + bodies.writeFields.join("\n\t\t") + "}";
+		expansions.readFields = "function readFields" + function_suffix + "(p,dst,objectdb) {\n\t\t" + bodies.readFields.join("\n\t\t") + "}";
+	}
+	return expansions;
 };
 
 
@@ -719,7 +850,11 @@ registerClass(new LiteralConfig('null', null));
 registerClass(new LiteralConfig('false', false));
 registerClass(new LiteralConfig('true', true));
 
-registerClass(new PrimitiveConfig('string'));
+registerClass(new PrimitiveConfig('string', {
+	makeTypeCheck: function (variable) {
+		return "typeof " + variable + " === 'string'";
+	}
+}));
 registerClass(new PrimitiveConfig('float64'));
 registerClass(new PrimitiveConfig('int8'));
 registerClass(new PrimitiveConfig('uint8'));
@@ -786,9 +921,11 @@ bserializer.finishExpansions = function(file) {
 			var expansions = config.makeExpansions();
 			var s = [];
 			for (func in expansions) {
-				s.push(func+':'+expansions[func]);
+				if (expansions[func]) {
+					s.push(func+':'+expansions[func]);
+				}
 			}
-			fs.writeSync(out, 'bserializer.addExpansions(' + idx + ', {\n\t' + s.join(",\n\t") + "});\n\n");
+			fs.writeSync(out, 'bserializer.addExpansions(' + idx + ', {\n\t' + s.join(",\n\t") + "\n\t});\n\n");
 		}
 	}
 	
@@ -933,12 +1070,7 @@ function copyGeneric(dst, src, objectdb) {
 	var config = detectConfig(src);
 //	if (debug) console.log("config=",config);
 	if (config) {
-		if (config.directCopy) {
-			dst = src;
-		}
-		else {
-			dst = config.copy(dst, src, objectdb);
-		}
+		dst = config.copy(dst, src, objectdb);
 	}
 	if (top_level) {
 		for (var i = 0, l = objectdb.length; i < l; i++) {
