@@ -245,7 +245,7 @@ Syncer.prototype.stop = function() {
 };
 
 Syncer.prototype.addMove = function(move, allowFuture) {
-	var next_tick = Math.ceil(this.getNowTick()) + 1;
+	var next_tick = this.getNowTick() + 1;
 	var valid = move.tick > this.getOldestTick() && (allowFuture || move.tick <= next_tick);
 //		console.log("addMove valid tick range:",this.getOldestTick(),"->",now_tick,":",move);
 	if (valid) {
@@ -276,9 +276,12 @@ Syncer.prototype.addMove = function(move, allowFuture) {
 	return valid;
 };
 
-Syncer.prototype.getNowTick = function() {
+Syncer.prototype.getNowTickPrecise = function() {
 	var now = getTime();
 	return (now - this.start_time) * this.config.lps / 1000;
+};
+Syncer.prototype.getNowTick = function() {
+	return Math.floor(this.getNowTickPrecise());
 };
 
 Syncer.prototype.needsUpdate = function() {
@@ -287,6 +290,7 @@ Syncer.prototype.needsUpdate = function() {
 };
 
 Syncer.prototype.update = function() {
+	var updated = false;
 	var now_tick = this.getNowTick();
 //	console.log("Updating ", this.dirty_tick, "->", now_tick);
 	while (this.dirty_tick < now_tick) {
@@ -355,11 +359,13 @@ Syncer.prototype.update = function() {
 		if (this.onUpdate) {
 			this.onUpdate();
 		}
+		updated = true;
 	}
 	now_tick = this.getNowTick();
 	if (this.dirty_tick + 1 < now_tick)  {
 		console.warn("Falling behind! Updated to " + this.tick + ", but need to be at " + now_tick);
 	}
+	return updated;
 };
 //var replays_written = 0;
 
