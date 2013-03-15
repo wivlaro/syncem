@@ -10,30 +10,102 @@ Packet.prototype.getDelivery = function() {
 };
 
 var PACKET_DEBUG = false;
+var PACKET_PROFILE = true;
+var pp = {};
+
+var gensym_count = 0;
+function gensym(prefix) {
+	if (typeof prefix === 'string') {
+		prefix = prefix.replace(/[^a-z]/gi,'_');
+	}
+	else {
+		prefix = 'gensym';
+	}
+	return prefix + (gensym_count++);
+}
 
 Packet.prototype.readBoolean = function() { return this.readUint8() !== 0; };
 Packet.prototype.writeBoolean = function(value) { this.writeUint8(value ? 1 : 0); };
 
-Packet.prototype.readInt8   = function() { var value = this.impl.getInt8   (this.offset); this.offset++;    PACKET_DEBUG && console.log("Read ",value); return value; };
-Packet.prototype.readUint8  = function() { var value = this.impl.getUint8  (this.offset); this.offset++;    PACKET_DEBUG && console.log("Read ",value); return value; };
-Packet.prototype.readInt16  = function() { var value = this.impl.getInt16  (this.offset); this.offset += 2; PACKET_DEBUG && console.log("Read ",value); return value; };
-Packet.prototype.readUint16 = function() { var value = this.impl.getUint16 (this.offset); this.offset += 2; PACKET_DEBUG && console.log("Read ",value); return value; };
-Packet.prototype.readInt32  = function() { var value = this.impl.getInt32  (this.offset); this.offset += 4; PACKET_DEBUG && console.log("Read ",value); return value; };
-Packet.prototype.readUint32 = function() { var value = this.impl.getUint32 (this.offset); this.offset += 4; PACKET_DEBUG && console.log("Read ",value); return value; };
-Packet.prototype.readFloat32= function() { var value = this.impl.getFloat32(this.offset); this.offset += 4; PACKET_DEBUG && console.log("Read ",value); return value; };
-Packet.prototype.readFloat64= function() { var value = this.impl.getFloat64(this.offset); this.offset += 8; PACKET_DEBUG && console.log("Read ",value); return value; };
+Packet.prototype.readInt8   = function() { var value = this.impl.getInt8   (this.offset); this.offset++;    return value; };
+Packet.prototype.readUint8  = function() { var value = this.impl.getUint8  (this.offset); this.offset++;    return value; };
+Packet.prototype.readInt16  = function() { var value = this.impl.getInt16  (this.offset); this.offset += 2; return value; };
+Packet.prototype.readUint16 = function() { var value = this.impl.getUint16 (this.offset); this.offset += 2; return value; };
+Packet.prototype.readInt32  = function() { var value = this.impl.getInt32  (this.offset); this.offset += 4; return value; };
+Packet.prototype.readUint32 = function() { var value = this.impl.getUint32 (this.offset); this.offset += 4; return value; };
+Packet.prototype.readFloat32= function() { var value = this.impl.getFloat32(this.offset); this.offset += 4; return value; };
+Packet.prototype.readFloat64= function() { var value = this.impl.getFloat64(this.offset); this.offset += 8; return value; };
 
-Packet.prototype.writeInt8   = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.setInt8   (this.offset++, value); };
-Packet.prototype.writeUint8  = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.setUint8  (this.offset++, value); };
-Packet.prototype.writeInt16  = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.setInt16  (this.offset, value); this.offset += 2; };
-Packet.prototype.writeUint16 = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.setUint16 (this.offset, value); this.offset += 2; };
-Packet.prototype.writeInt32  = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.setInt32  (this.offset, value); this.offset += 4; };
-Packet.prototype.writeUint32 = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.setUint32 (this.offset, value); this.offset += 4; };
-Packet.prototype.writeFloat32= function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.setFloat32(this.offset, value); this.offset += 4; };
-Packet.prototype.writeFloat64= function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.setFloat64(this.offset, value); this.offset += 8; };
+Packet.prototype.writeInt8   = function(value) { this.impl.setInt8   (this.offset++, value); };
+Packet.prototype.writeUint8  = function(value) { this.impl.setUint8  (this.offset++, value); };
+Packet.prototype.writeInt16  = function(value) { this.impl.setInt16  (this.offset, value); this.offset += 2; };
+Packet.prototype.writeUint16 = function(value) { this.impl.setUint16 (this.offset, value); this.offset += 2; };
+Packet.prototype.writeInt32  = function(value) { this.impl.setInt32  (this.offset, value); this.offset += 4; };
+Packet.prototype.writeUint32 = function(value) { this.impl.setUint32 (this.offset, value); this.offset += 4; };
+Packet.prototype.writeFloat32= function(value) { this.impl.setFloat32(this.offset, value); this.offset += 4; };
+Packet.prototype.writeFloat64= function(value) { this.impl.setFloat64(this.offset, value); this.offset += 8; };
+
+Packet.prototype.writeSmartUint = function(value) {
+	if (value < (1<<6)) {
+		this.writeUint8(value);
+		return;
+	}
+	value -= 64;
+	if (value < (1<<14)) {
+		this.writeUint8(0x40 | (value >>> 8));
+		this.writeUint8(value & 0xff);
+		return;
+	}
+	value -= (1<<14);
+	if (value < (1<<22)) {
+		this.writeUint8(0x80 | (value >>> 16));
+		this.writeUint8((value >>> 8) & 0xff);
+		this.writeUint8(value & 0xff);
+		return;
+	}
+	value -= (1<<22);
+	if (value < (1<<30)) {
+		this.writeUint8(0xc0 | (value >>> 24));
+		this.writeUint8((value >>> 16) & 0xff);
+		this.writeUint8((value >>> 8) & 0xff);
+		this.writeUint8(value & 0xff);
+		return;
+	}
+	throw "Value too large for smart uint: " + value + " over";
+};
+
+Packet.prototype.readSmartUint = function() {
+	var value = this.readUint8();
+	if (value < 64) {
+		return value;
+	}
+	switch (value >>> 6) {
+		case 0:
+			return value;
+		case 1:
+			value = (value & 0x3f);
+			value = (value << 8) + this.readUint8();
+			value += 1<<6;
+			return value;
+		case 2:
+			value = (value & 0x3f);
+			value = (value << 8) + this.readUint8();
+			value = (value << 8) + this.readUint8();
+			value += (1<<6) + (1<<14);
+			return value;
+		case 3:
+			value = (value & 0x3f);
+			value = (value << 8) + this.readUint8();
+			value = (value << 8) + this.readUint8();
+			value = (value << 8) + this.readUint8();
+			value += (1<<6) + (1<<14) + (1<<22);
+			return value;
+	}
+	throw "Invalid state!";
+};
 
 Packet.prototype.readString = function() {
-	var length = this.readUint32();
+	var length = this.readSmartUint();
 	var value = '';
 	for (var index = 0; index < length; index ++) {
 		var char = this.readUint8();
@@ -76,7 +148,7 @@ Packet.prototype.readString = function() {
 
 Packet.prototype.writeString = function(value) {
 	var length = value.length;
-	this.writeUint32(length);
+	this.writeSmartUint(length);
 	for (var index = 0 ; index < value.length; index++) {
 		var codePoint = value.charCodeAt(index);
 		if (codePoint < 0x80) {
@@ -137,14 +209,14 @@ if (have_BufferPacket) {
 	BufferPacket.prototype.readFloat32= function() { var value = this.impl.readFloatBE  (this.offset); this.offset += 4; PACKET_DEBUG && console.log("Read ",value); return value; };
 	BufferPacket.prototype.readFloat64= function() { var value = this.impl.readDoubleBE (this.offset); this.offset += 8; PACKET_DEBUG && console.log("Read ",value); return value; };
 	
-	BufferPacket.prototype.writeInt8   = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeInt8     (value, this.offset++); };
-	BufferPacket.prototype.writeUint8  = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeUInt8    (value, this.offset++); };
-	BufferPacket.prototype.writeInt16  = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeInt16BE  (value, this.offset  ); this.offset += 2; };
-	BufferPacket.prototype.writeUint16 = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeUInt16BE (value, this.offset  ); this.offset += 2; };
-	BufferPacket.prototype.writeInt32  = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeInt32BE  (value, this.offset  ); this.offset += 4; };
-	BufferPacket.prototype.writeUint32 = function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeUInt32BE (value, this.offset  ); this.offset += 4; };
-	BufferPacket.prototype.writeFloat32= function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeFloatBE  (value, this.offset  , true); this.offset += 4; };
-	BufferPacket.prototype.writeFloat64= function(value) { PACKET_DEBUG && console.log("Write", value); this.impl.writeDoubleBE (value, this.offset  , true); this.offset += 8; };
+	BufferPacket.prototype.writeInt8   = function(value) { if (PACKET_PROFILE) { var s = new Error().stack.split("\n"); for (var i=1;i<s.length && i<10;i++) pp[s[i]] = (pp[s[i]]||0) + 1; } this.impl.writeInt8     (value, this.offset++); };
+	BufferPacket.prototype.writeUint8  = function(value) { if (PACKET_PROFILE) { var s = new Error().stack.split("\n"); for (var i=1;i<s.length && i<10;i++) pp[s[i]] = (pp[s[i]]||0) + 1; } this.impl.writeUInt8    (value, this.offset++); };
+	BufferPacket.prototype.writeInt16  = function(value) { if (PACKET_PROFILE) { var s = new Error().stack.split("\n"); for (var i=1;i<s.length && i<10;i++) pp[s[i]] = (pp[s[i]]||0) + 2; } this.impl.writeInt16BE  (value, this.offset  ); this.offset += 2; };
+	BufferPacket.prototype.writeUint16 = function(value) { if (PACKET_PROFILE) { var s = new Error().stack.split("\n"); for (var i=1;i<s.length && i<10;i++) pp[s[i]] = (pp[s[i]]||0) + 2; } this.impl.writeUInt16BE (value, this.offset  ); this.offset += 2; };
+	BufferPacket.prototype.writeInt32  = function(value) { if (PACKET_PROFILE) { var s = new Error().stack.split("\n"); for (var i=1;i<s.length && i<10;i++) pp[s[i]] = (pp[s[i]]||0) + 4; } this.impl.writeInt32BE  (value, this.offset  ); this.offset += 4; };
+	BufferPacket.prototype.writeUint32 = function(value) { if (PACKET_PROFILE) { var s = new Error().stack.split("\n"); for (var i=1;i<s.length && i<10;i++) pp[s[i]] = (pp[s[i]]||0) + 4; } this.impl.writeUInt32BE (value, this.offset  ); this.offset += 4; };
+	BufferPacket.prototype.writeFloat32= function(value) { if (PACKET_PROFILE) { var s = new Error().stack.split("\n"); for (var i=1;i<s.length && i<10;i++) pp[s[i]] = (pp[s[i]]||0) + 4; } this.impl.writeFloatBE  (value, this.offset  , true); this.offset += 4; };
+	BufferPacket.prototype.writeFloat64= function(value) { if (PACKET_PROFILE) { var s = new Error().stack.split("\n"); for (var i=1;i<s.length && i<10;i++) pp[s[i]] = (pp[s[i]]||0) + 8; } this.impl.writeDoubleBE (value, this.offset  , true); this.offset += 8; };
 	
 	BufferPacket.prototype.getDelivery = function() {
 //		console.log("getDelivery to ",this.offset," length=",this.impl.length," of ",this.impl);
@@ -184,6 +256,8 @@ var unannotatedRegistrations = [];
 var registrationsByIndex = [];
 var registrationsByName = {};
 
+bserializer.registrationsByIndex = registrationsByIndex;
+
 function registerClass(config) {
 	var config;
 	
@@ -217,10 +291,54 @@ function registerClass(config) {
 }
 bserializer.registerClass = registerClass;
 
+function expand_template() {
+	var strings = [];
+	var replacements = {};
+	for (var i = 0; i < arguments.length; i++) {
+		var arg = arguments[i];
+		//Strings are the templates
+		if (typeof arg === 'string') {
+			if (typeof strings === 'undefined') strings = [];
+			strings.push(arg);
+		}
+		else if (Array.isArray(arg)) {
+			if (typeof strings === 'undefined') strings = arg;
+			else strings = strings.concat(arg);
+		}
+		else if (typeof arg === 'object') {
+			for (var k in arg) {
+				replacements[k] = arg[k];
+			}
+		}
+	}
+	for (var i = 0, l = strings.length; i < l; i++) {
+		for (var k in replacements) {
+			strings[i] = strings[i].replace(new RegExp('@'+k+'\\b@?', 'g'), arg[k]);
+		}
+	}
+	return strings;
+}
+
+function array_append(a1, a2) {
+	a1.splice.apply(a1, [a1.length, 0].concat(a2));
+}
+
+function for_each(a, f) {
+	for (var i = 0, l = a.length; i < l; i++) f(a[i]);
+}
+function map(a, f) {
+	var r = []; r.length = a.length;
+	for (var i = 0, l = a.length; i < l; i++) r[i] = f(a[i]);
+	return r;
+}
+
 function BaseConfig(name) {
 	this.name = name;
 	this.index = -1;
 }
+BaseConfig.prototype.equals = function (self, other) {
+	return self === other;
+};
 
 function LiteralConfig(name, value) {
 	BaseConfig.call(this, name);
@@ -239,11 +357,8 @@ LiteralConfig.prototype.write = function () {
 LiteralConfig.prototype.copy = function () {
 	return this.value;
 };
-LiteralConfig.prototype.makeWriteFieldExpansion = function() {
-	return '';
-};
-LiteralConfig.prototype.makeReadFieldExpansion = function(dst) {
-	return dst + ' = ' + this.value + ';';
+LiteralConfig.prototype.makeWriteReadExpansion = function(writes, reads, src, dst) {
+	reads.push(dst + ' = ' + this.value + ';');
 };
 
 function PrimitiveConfig(name, config) {
@@ -262,11 +377,9 @@ PrimitiveConfig.prototype.copy = function(dst, src) {
 PrimitiveConfig.prototype.makeTypeCheck = function (variable) {
 	return "typeof " + variable + " === 'number'";
 };
-PrimitiveConfig.prototype.makeWriteFieldExpansion = function(src) {
-	return "p.write" + this.typeCapitalised() + "(" + src + ");";
-};
-PrimitiveConfig.prototype.makeReadFieldExpansion = function(dst) {
-	return dst + " = p.read" + this.typeCapitalised() + "();";
+PrimitiveConfig.prototype.makeWriteReadExpansion = function(writes, reads, src, dst) {
+	writes.push("p.write" + this.typeCapitalised() + "(" + src + ");");
+	reads.push(dst + " = p.read" + this.typeCapitalised() + "();");
 };
 
 PrimitiveConfig.prototype.typeCapitalised = function() {
@@ -274,22 +387,19 @@ PrimitiveConfig.prototype.typeCapitalised = function() {
 };
 
 PrimitiveConfig.prototype.makeExpansions = function() {
-	var templates = {
-		write: [
-			"function write#TYPE#(p, src) {",
-			"	p.write#TYPE#(src);",
-			"}"],
-		read: [
-			"function read#TYPE#(p) {",
-			"	return p.read#TYPE#();",
-			"}"]
+	var expansion = {Type:this.typeCapitalised()};
+	return {
+		write: expand_template(
+			"function write@Type(p, src) {",
+			"	p.write@Type(src);",
+			"}",
+			expansion),
+		read: expand_template(
+			"function read@Type(p) {",
+			"	return p.read@Type();",
+			"}",
+			expansion)
 	};
-	
-	var expansions = {};
-	for (var fname in templates) {
-		expansions[fname] = templates[fname].join("\n\t").replace(/#TYPE#/g, this.typeCapitalised());
-	}
-	return expansions;
 };
 
 
@@ -337,35 +447,70 @@ function ObjectConfig(config) {
 ObjectConfig.prototype = new BaseConfig();
 ObjectConfig.prototype.constructor = ObjectConfig;
 
+var equals_path = [];
+
+function equalsOffset(self, other, offset) {
+	var equals = true;
+	equals_path.push(offset);
+	if (!equalsGeneric(self[offset], other[offset])) {
+		console.warn("Inequal:", equals_path.join('.'), self[offset], "!=", other[offset]);
+		equals = false;
+	}
+	equals_path.pop();	
+	return equals;
+}
+
+ObjectConfig.prototype.equals = function (self, other) {
+	if (self === other) return true;
+	var equals = true;
+	
+	if (this.ctor_args) {
+		for (var idx = 0; idx < this.ctor_args.length ; idx ++ ) {
+			var f = this.ctor_args[idx];
+			if (!equalsOffset(self, other, f)) equals = false;
+		}
+	}
+	if (this.fields != null) {
+		for (var i = 0, l = this.fields.length; i < l; i++) {
+			var field = this.fields[i];
+			if (!(this.ctor_args && this.ctor_args.indexOf(field.name) !== -1)) {
+				var f = field.name;
+				if (!equalsOffset(self, other, f)) equals = false;
+			}
+		}
+	}
+	else {
+		for (var f in other) {
+			if (typeof other[f] !== 'function' && !(this.not && (f in this.not)) && !(this.ctor_args && this.ctor_args.indexOf(f) !== -1)) {
+				if (!equalsOffset(self, other, f)) equals = false;
+			}
+		}
+	}
+	return equals;
+};
+
 ObjectConfig.prototype.write = function(p, src, objectdb) {
+	console.log("Writing @"+p.offset+": "+JSON.stringify(this));
 	if (this.circular) {
 		var b_already_written = typeof src.$bserializer_writeIndex !== 'undefined';
 		p.writeBoolean(b_already_written);
 		if (b_already_written) {
-//			console.log("write circular ref @", src.$bserializer_writeIndex, this.name || this.ctor.name || this.index);
-			p.writeUint16(src.$bserializer_writeIndex);
+			p.writeSmartUint(src.$bserializer_writeIndex);
 			return;
 		}
 		else {
 			src.$bserializer_writeIndex = objectdb.length;
-//			console.log("write new circular @", src.$bserializer_writeIndex, this.name || this.ctor.name || this.index);
 			objectdb.push(src);
 		}
 	}
 	this.writeCtorArgs(p, src, objectdb);
 	this.writeFields(p, src, objectdb);
 };
-//var indent = [];
 ObjectConfig.prototype.writeCtorArgs = function (p, src, objectdb) {
 	if (this.ctor_args) {
 		for (var idx = 0; idx < this.ctor_args.length ; idx ++ ) {
 			var f = this.ctor_args[idx];
-//			var start = p.offset;
-//			console.log(indent.join(' ') + 'writing '+f+' @'+start);
-//			indent.push('');
 			writeGeneric(p, src[f], objectdb);
-//			indent.pop();
-//			console.log(indent.join(' ') + 'wrote '+f+' @'+p.offset+' in '+(p.offset-start));
 		}
 	}
 };
@@ -375,12 +520,7 @@ ObjectConfig.prototype.writeFields = function (p, src, objectdb) {
 			var field = this.fields[i];
 			if (!(this.ctor_args && this.ctor_args.indexOf(field.name) !== -1)) {
 				var f = field.name;
-//				var start = p.offset;
-//				console.log(indent.join(' ') + 'writing '+f+' @'+start);
-//				indent.push('');
 				writeGeneric(p, src[f], objectdb);
-//				indent.pop();
-//				console.log(indent.join(' ') + 'wrote '+f+' @'+p.offset+' in '+(p.offset-start));
 			}
 		}
 	}
@@ -391,16 +531,11 @@ ObjectConfig.prototype.writeFields = function (p, src, objectdb) {
 				n++;
 			}
 		}
-		p.writeUint16(n);
+		p.writeSmartUint(n);
 		for (var f in src) {
 			if (f !== '$bserializer_writeIndex' && typeof src[f] !== 'function' && !(this.not && (f in this.not)) && !(this.ctor_args && this.ctor_args.indexOf(f) !== -1)) {
 				p.writeString(f);
-//				var start = p.offset;
-//				isNaN(f) && console.log(indent.join(' ') + 'writing '+f+' @'+start);
-//				indent.push('');
 				writeGeneric(p, src[f], objectdb);
-//				indent.pop();
-//				isNaN(f) && console.log(indent.join(' ') + 'wrote '+f+' @'+p.offset+' in '+(p.offset-start));
 			}
 		}
 	}
@@ -422,7 +557,7 @@ ObjectConfig.prototype.read = function(p, dst, objectdb) {
 	if (this.circular) {
 		var b_already_written = p.readBoolean();
 		if (b_already_written) {
-			var reference = p.readUint16();
+			var reference = p.readSmartUint();
 			dst = objectdb[reference];
 //			console.log("read circular object @", reference, this.name || this.ctor.name || this.index);
 			return dst;
@@ -472,7 +607,7 @@ ObjectConfig.prototype.readFields = function(p, dst, objectdb) {
 		}
 	}
 	else {
-		var n = p.readUint16();
+		var n = p.readSmartUint();
 		var removals = {};
 		for (var f in dst) {
 			if (typeof dst[f] !== 'function') {
@@ -556,19 +691,13 @@ ObjectConfig.prototype.makeExpansions = function() {
 		readFields:[]
 	};
 	
+	bodies.writeFields.push("console.log('Writing fields for " + JSON.stringify(this)+"');");
+	
 	if (this.circular) {
 		bodies.copy.push('var dst_orig = this.getCopyCircular(dst, src, objectdb);');
 		bodies.copy.push("if (typeof dst_orig !== 'undefined') return dst_orig;");
 	}
 
-	function for_each(a, f) {
-		for (var i = 0, l = a.length; i < l; i++) f(a[i]);
-	}
-	function map(a, f) {
-		var r = []; r.length = a.length;
-		for (var i = 0, l = a.length; i < l; i++) r[i] = f(a[i]);
-		return r;
-	}
 	function output_copy_direct(field) {
 		bodies.copy.push('dst.' + field.name + ' = src.' + field.name + ';');
 	}
@@ -576,29 +705,10 @@ ObjectConfig.prototype.makeExpansions = function() {
 		bodies.copy.push('dst.' + field.name + ' = bserializer.copyGeneric(dst.' + field.name + ', src.' + field.name + ', objectdb);');
 	}
 	
-	function get_field_config(field_type) {
-		var config;
-		if (field_type.$bserializerclassid in registrationsByIndex) {
-			config = registrationsByIndex[field_type.$bserializerclassid];
-		}
-		else if (field_type in registrationsByName) {
-			config = registrationsByName[field_type];
-		}
-		return config;
-	}
-	
 	function output_copy_by_type(field) {
 		if (field.type.$bserializerclassid in registrationsByIndex) {
 			output_copy_generic(field);
 		}
-//		else if (Array.isArray(field.type)) {
-//			for (var i = 0, l = field.type.length; i < l; i++) {
-//				var config = get_field_config(field.type[i]);
-//				bodies.writeFields.push((i > 0 ? 'else if' : 'if') + " (" + config.makeTypeCheck("src." + field.name) + ") {");
-//				bodies.writeFields.push("\t" + config.makeCopyFieldExpansion(field.name));
-//				bodies.writeFields.push("}");
-//			}
-//		}
 		else if (typeof field.type === 'string') {
 			switch (field.type) {
 				case 'boolean':
@@ -655,52 +765,19 @@ ObjectConfig.prototype.makeExpansions = function() {
 		bodies.copy.push('this.setCopyCircular(dst, src, objectdb);');
 	}
 	var read_write_written = {};
-	function output_field_read_write(writes, reads, field, ctor_mode) {
+	function output_field_write_read(writes, reads, field, ctor_mode) {
 		if (field.name in read_write_written) return;
 		read_write_written[field.name] = true;
-		var write_src = 'src.' + field.name;
 		var read_dst;
 		if (ctor_mode) {
-			read_dst = '_dst_' + field.name;
+			read_dst = gensym(field.name);
 			reads.push('var ' + read_dst + ';');
-			reads.push('if (dst != null) ' + read_dst + ' = dst.' + field.name);
+			reads.push('if (dst != null) ' + read_dst + ' = dst.' + field.name + ';');
 		}
 		else {
 			read_dst = 'dst.' + field.name;
 		}
-		if (Array.isArray(field.type)) {
-			var configs = map(field.type, get_field_config);
-			reads.push('switch (p.readUint8()) {');
-			for (var i = 0, l = configs.length; i < l; i++) {
-				writes.push((i > 0 ? 'else if' : 'if') + " (" + configs[i].makeTypeCheck(write_src) + ") {");
-				writes.push("\tp.writeUint8(" + i + ");");
-				writes.push("\t" + configs[i].makeWriteFieldExpansion(write_src));
-				writes.push("}");
-
-				reads.push('\tcase ' + i + ':');
-				reads.push("\t\t" + configs[i].makeReadFieldExpansion(read_dst));
-				reads.push("\t\tbreak;");
-			}
-
-			writes.push("else {");
-			writes.push("\tthrow 'Unhandled type on write';");
-			writes.push('}');
-
-			reads.push("\tdefault:");
-			reads.push("\t\tthrow 'Unhandled type on read';");
-			reads.push('}');
-		}
-		else {
-			var config = get_field_config(field.type);
-			if (config && config.makeWriteFieldExpansion && config.makeReadFieldExpansion) {
-				writes.push(config.makeWriteFieldExpansion(write_src));
-				reads.push(config.makeReadFieldExpansion(read_dst));
-			}
-			else {
-				writes.push("bserializer.writeGeneric(p, " + write_src + ", objectdb);");
-				reads.push(read_dst + " = bserializer.readGeneric(p, " + read_dst + ", objectdb);");
-			}
-		}
+		makeWriteReadExpansions(writes, reads, 'src.' + field.name, read_dst, field);
 		return read_dst;
 	}
 	if (this.ctor_args) {
@@ -713,13 +790,13 @@ ObjectConfig.prototype.makeExpansions = function() {
 				for (var i = 0, l = fields.length; i < l; i++) {
 					var field = fields[i];
 					if (field === ctor_arg_name || field.name === ctor_arg_name) {
-						read_dst = output_field_read_write(bodies.writeCtorArgs, bodies.readCtorArgs, field, true);
+						read_dst = output_field_write_read(bodies.writeCtorArgs, bodies.readCtorArgs, field, true);
 						break;
 					}
 				}
 			}
 			if (typeof read_dst === 'undefined') {
-				read_dst = output_field_read_write(bodies.writeCtorArgs, bodies.readCtorArgs, {name:ctor_arg_name, type:'generic'}, true);
+				read_dst = output_field_write_read(bodies.writeCtorArgs, bodies.readCtorArgs, {name:ctor_arg_name, type:'generic'}, true);
 			}
 			return read_dst;
 		});
@@ -730,7 +807,7 @@ ObjectConfig.prototype.makeExpansions = function() {
 			if (!field.static) {
 				output_copy_by_type(field);
 			}
-			output_field_read_write(bodies.writeFields, bodies.readFields, field);
+			output_field_write_read(bodies.writeFields, bodies.readFields, field);
 		});
 	}
 	else {
@@ -753,6 +830,68 @@ ObjectConfig.prototype.makeExpansions = function() {
 	return expansions;
 };
 
+ObjectConfig.prototype.makeWriteReadExpansion = function (writes, reads, write_src, read_dst) {
+	writes.push("bserializer.registrationsByIndex["+this.index+"].write(p, " + write_src + ", objectdb);");
+	reads.push(read_dst + " = bserializer.registrationsByIndex["+this.index+"].read(p, " + read_dst + ", objectdb);");
+};
+	
+function getTypeConfig(field_type) {
+	var config;
+	if (field_type.$bserializerclassid in registrationsByIndex) {
+		config = registrationsByIndex[field_type.$bserializerclassid];
+	}
+	else if (field_type in registrationsByName) {
+		config = registrationsByName[field_type];
+	}
+	else if (field_type in registrationsByIndex) {
+		config = registrationsByIndex[field_type];
+	}
+	return config;
+}
+
+function makeWriteReadExpansions(writes, reads, src, dst, field) {
+	writes.push("console.log('Writing " + src + "');");
+	if (field && Array.isArray(field.type)) {
+		var configs = map(field.type, getTypeConfig);
+		reads.push('switch (p.readUint8()) {');
+		for (var i = 0, l = configs.length; i < l; i++) {
+			var config = configs[i];
+			
+			var type_check;
+			if (config.makeTypeCheck) {
+				type_check = config.makeTypeCheck(src);
+			}
+			else {
+				type_check = src + ' != null && ' + src + '.constructor === this.ctor';
+			}
+			
+			writes.push((i > 0 ? 'else if' : 'if') + " (" + type_check + ") {");
+			writes.push("\tp.writeUint8(" + i + ");");
+			reads.push('\tcase ' + i + ':');
+			config.makeWriteReadExpansion(writes, reads, src, dst, field);
+			writes.push("}");
+			reads.push("\t\tbreak;");
+		}
+
+		writes.push("else {");
+		writes.push("\tthrow 'Unhandled type on write';");
+		writes.push('}');
+
+		reads.push("\tdefault:");
+		reads.push("\t\tthrow 'Unhandled type on read';");
+		reads.push('}');
+	}
+	else {
+		var config = field && field.type && getTypeConfig(field.type);
+		if (config && config.makeWriteReadExpansion) {
+			config.makeWriteReadExpansion(writes, reads, src, dst, field);
+		}
+		else {
+			writes.push("bserializer.writeGeneric(p, " + src + ", objectdb);");
+			reads.push(dst + " = bserializer.readGeneric(p, " + dst + ", objectdb);");
+		}
+	}
+}
 
 function ArrayConfig(name) {
 	BaseConfig.call(this, name);
@@ -760,15 +899,79 @@ function ArrayConfig(name) {
 ArrayConfig.prototype = new BaseConfig();
 ArrayConfig.prototype.constructor = ArrayConfig;
 
+ArrayConfig.prototype.equals = function(self, other) {
+	if (!Array.isArray(other)) {
+		console.warn(equals_path.join('.') + " not an array");
+		return false;
+	}
+	if (self.length !== other.length) {
+		console.warn(equals_path.join('.') + " array length mismatch ", self.length, "!=", other.length);
+		return false;
+	}
+	var equals = true;
+	for (var i = 0, l = self.length; i < l ; i++) {
+		if (!equalsOffset(self, other, i)) {
+			equals = false;
+		}
+	}
+	return equals;
+};
+
 ArrayConfig.prototype.write = function(p, src, objectdb) {
-	p.writeUint32(src.length);
+	p.writeSmartUint(src.length);
 	for (var i = 0, l = src.length; i < l; i++) {
 		writeGeneric(p, src[i], objectdb);
 	}
 };
 
+
+ArrayConfig.prototype.makeWriteReadExpansion = function (writes, reads, write_src, read_dst, field) {
+	
+	var i = gensym('i');
+	var l = gensym('l');
+	var src = gensym(write_src);
+	var element_writes = [];
+	var element_reads = [];
+	makeWriteReadExpansions(element_writes, element_reads, src + '[' + i + ']', read_dst + '[' + i + ']', field.element);
+	
+	array_append(writes, expand_template(
+			"var @src = @src_expr, @l = @src.length;",
+			"p.writeSmartUint(@l);",
+			"for (var @i = 0; @i < @l; @i++) {",
+			'console.log("Writing " + @i + "/" + @l + ": " + src[@i])',
+			element_writes,
+			"}",
+			{
+				src:src,
+				src_expr:write_src,
+				i:i,
+				l:l
+			}
+		));
+			
+	array_append(reads, expand_template(
+			"var @l = p.readSmartUint();",
+			"if (@dst == null || @dst.length !== @l) {",
+			"	@dst = [];",
+			"	@dst.length = @l;",
+			"}",
+			"for (var @i = 0; @i < @l; @i++) {",
+			element_reads,
+			"}",
+			{
+				dst:read_dst,
+				i:i,
+				l:l
+			}
+		));
+};
+
+ArrayConfig.prototype.makeWriteExpansion = function (src_expr, field) {
+	return ;
+};
+
 ArrayConfig.prototype.read = function(p, dst, objectdb) {
-	var l = p.readUint32();
+	var l = p.readSmartUint();
 	if (dst == null || dst.length !== l) {
 		dst = [];
 		dst.length = l;
@@ -777,6 +980,9 @@ ArrayConfig.prototype.read = function(p, dst, objectdb) {
 		dst[i] = readGeneric(p, dst[i], objectdb);
 	}
 	return dst;
+};
+
+ArrayConfig.prototype.makeReadExpansion = function (dst, field) {
 };
 
 ArrayConfig.prototype.copy = function (dst, src, objectdb) {
@@ -803,45 +1009,45 @@ TypedArrayConfig.prototype = new BaseConfig();
 TypedArrayConfig.prototype.constructor = TypedArrayConfig;
 
 TypedArrayConfig.prototype.makeExpansions = function() {
-	var templates = {
-		write: [
-			"function write" + this.index + "(p,src) {",
+	var expansion = {
+		Prefix: this.prefix
+	};
+	return {
+		write: expand_template(
+			"function write@Prefix(p,src) {",
 			"	var l = src.length;",
-			"	p.writeUint32(l);",
+			"	p.writeSmartUint(l);",
 			"	for (var i = 0; i < l ; i++) {",
-			"		p.write#TYPE#(src[i]);",
+			"		p.write@Prefix(src[i]);",
 			"	}",
-			"}"],
-		read: [
-			"function read" + this.index + "(p,dst) {",
-			"	var l = p.readUint32();",
-			"	if (dst == null || dst.constructor !== #TYPE#Array || dst.length !== l) {",
-			"		dst = new #TYPE#Array(l);",
+			"}",
+			expansion),
+		read: expand_template(
+			"function read@Prefix(p,dst) {",
+			"	var l = p.readSmartUint();",
+			"	if (dst == null || dst.constructor !== @Prefix@Array || dst.length !== l) {",
+			"		dst = new @Prefix@Array(l);",
 			"	}",
 			"	for (var i = 0; i < l ; i++) {",
-			"		dst[i] = p.read#TYPE#();",
+			"		dst[i] = p.read@Prefix();",
 			"	}",
 			"	return dst;",
-			"}"],
-		copy: [
-			"function copy" + this.index + "(dst,src,objectdb) {",
+			"}",
+			expansion),
+		copy: expand_template(
+			"function copy@Prefix(dst,src,objectdb) {",
 			"	if (src == null) {",
 			"		dst = src;",
 			"	}",
-			"	else if (dst == null || dst.constructor !== #TYPE#Array || dst.length !== src.length) {",
-			"		dst = new #TYPE#Array(src);",
+			"	else if (dst == null || dst.constructor !== @Prefix@Array || dst.length !== src.length) {",
+			"		dst = new @Prefix@Array(src);",
 			"	}",
 			"	else {",
 			"		dst.set(src);",
 			"	}",
 			"	return dst;",
-			"}"]};
-	
-	var expansions = {};
-	for (var fname in templates) {
-		expansions[fname] = templates[fname].join("\n\t").replace(/#TYPE#/g, this.prefix);
-	}
-	return expansions;
+			"}",
+			expansion)};
 };
 
 
@@ -863,6 +1069,11 @@ registerClass(new PrimitiveConfig('uint16'));
 registerClass(new PrimitiveConfig('int32'));
 registerClass(new PrimitiveConfig('uint32'));
 registerClass(new PrimitiveConfig('float32'));
+registerClass(new PrimitiveConfig('smartuint', {
+	typeCapitalised : function() {
+		return 'SmartUint';
+	}
+}));
 
 registerClass(new ObjectConfig({name:'object', noAnnotate:true, noExpand:true}));
 registerClass(new ArrayConfig('array'));
@@ -921,8 +1132,12 @@ bserializer.finishExpansions = function(file) {
 			var expansions = config.makeExpansions();
 			var s = [];
 			for (func in expansions) {
-				if (expansions[func]) {
-					s.push(func+':'+expansions[func]);
+				var expansion = expansions[func];
+				if (Array.isArray(expansion)) {
+					expansion = expansion.join("\n\t");
+				}
+				if (expansion) {
+					s.push(func+':'+expansion);
 				}
 			}
 			fs.writeSync(out, 'bserializer.addExpansions(' + idx + ', {\n\t' + s.join(",\n\t") + "\n\t});\n\n");
@@ -938,76 +1153,6 @@ bserializer.addExpansions = function addExpansions(index, expansions){
 	for (var expansion_name in expansions) {
 		registrationsByIndex[index][expansion_name] = expansions[expansion_name];
 	}
-};
-
-function ObjectMapper() {
-	this.num_objects = 0;
-	this.objects = [];
-}
-ObjectMapper.pool = [];
-ObjectMapper.create = function () {
-	var mapper;
-	if (ObjectMapper.pool.length > 0) {
-//		console.log("Recycling object mapper from pool of "+ ObjectMapper.pool.length);
-		mapper = ObjectMapper.pool.shift();
-	}
-	else {
-//		console.log("Creating new ObjectMapper");
-		mapper = new ObjectMapper();
-	}
-	return mapper;
-};
-
-ObjectMapper.prototype.set = function(k, v) {
-	if (k.$bserializerid != null) {
-		console.trace('Object already set ' + k.$bserializerid);
-		this.objects[k.$bserializerid].v = v;
-	}
-	else {
-		k.$bserializerid = this.num_objects++;
-		if (this.num_objects > this.objects.length) {
-			this.objects.push({k:k,v:v});
-		}
-		else {
-			var obj = this.objects[k.$bserializerid];
-			obj.k = k;
-			obj.v = v;
-		}
-//		console.trace('Setting object ' + k.$bserializerid);
-	}
-	return k.$bserializerid;
-};
-ObjectMapper.prototype.get = function(k) {
-	var id = k.$bserializerid;
-	return id && this.objects[id].v;
-};
-ObjectMapper.prototype.getIndex = function(k) {
-	return k.$bserializerid;
-};
-ObjectMapper.prototype.discard = function() {
-	for (var i=0;i<this.num_objects;i++) {
-		var obj = this.objects[i];
-		delete obj.k.$bserializerid;
-		obj.k = null;
-		obj.v = null;
-	}
-	this.num_objects = 0;
-	ObjectMapper.pool.push(this);
-};
-ObjectMapper.prototype.getFinalValues = function() {
-	var values = [];
-	values.length = this.num_objects;
-	for (var i=0;i<this.num_objects;i++) {
-		var obj = this.objects[i];
-		delete obj.k.$bserializerid;
-		values[i] = obj.v;
-		values[i].i = i;
-		obj.k = null;
-		obj.v = null;
-	}
-	this.num_objects = 0;
-	ObjectMapper.pool.push(this);
-	return values;
 };
 
 function detectConfig(src) {
@@ -1081,6 +1226,11 @@ function copyGeneric(dst, src, objectdb) {
 }
 bserializer.copyGeneric = copyGeneric;
 
+function equalsGeneric(self, other) {
+	return detectConfig(self).equals(self, other);
+}
+bserializer.readGeneric = readGeneric;
+
 function writeGeneric(p, src, objectdb) {
 	var top_level = typeof objectdb === 'undefined';
 	if (top_level) {
@@ -1088,7 +1238,7 @@ function writeGeneric(p, src, objectdb) {
 	}
 	var config = detectConfig(src);
 	if (config) {
-		p.writeUint16(config.index);
+		p.writeSmartUint(config.index);
 		if (config.write != null) {
 			config.write(p, src, objectdb);
 		}
@@ -1109,7 +1259,7 @@ function readGeneric(p, dst, objectdb) {
 	if (top_level) {
 		objectdb = [];
 	}
-	var index = p.readUint16();
+	var index = p.readSmartUint();
 	var config = registrationsByIndex[index];
 	if (config.read != null) {
 		dst = config.read(p, dst, objectdb);
@@ -1119,9 +1269,19 @@ function readGeneric(p, dst, objectdb) {
 bserializer.readGeneric = readGeneric;
 
 function serialize(obj) {
+	if (PACKET_PROFILE) pp = {};
 	packet.offset = 0;
 	bserializer.writeGeneric(packet, obj);
-//	console.log("serialize bytes=" + packet.offset, obj);
+	if (PACKET_PROFILE) {
+		var a = [];
+		for (var s in pp) {
+			a.push([pp[s],s]);
+		}
+		a.sort(function (a,b){
+			return b[0] - a[0];
+		});
+		console.log("serialize bytes=" + packet.offset, a);
+	}
 	return packet.getDelivery();
 }
 
@@ -1135,293 +1295,5 @@ function deserialize(buffer, obj) {
 }
 
 bserializer.deserialize = deserialize;
-
-function serialize_old(input, objectdb) {
-//	console.log("registrations:", registrationsByIndex.length);
-	var top_level = objectdb === undefined;
-	if (top_level) {
-		objectdb = ObjectMapper.create();
-	}
-	var payload;
-	var output;
-	function serializeArray(type) {
-		var entry = {};
-		payload = [];
-		payload.length = input.length;
-		entry[type] = payload;
-		//Firefox doesn't allow you to set custom parameters on array buffers
-//		output = {r:objectdb.set(input, entry)};
-		for (var index = 0 ; index < input.length; index++) {
-//			console.log("Serializing array ", type, "[", index, "]:", input[index]);
-			payload[index] = serialize_old(input[index], objectdb);
-		}
-		output = entry;
-	}
-	
-	if (input === undefined) {
-		output = {u:0};
-	}
-	else if (input === null) {
-		output = {x:0};
-	}
-	else if (typeof input === 'object' && (payload = objectdb.getIndex(input)) !== undefined) {
-		output = {r:payload};
-//		console.log("Outputting already-serialized ", output);
-	}
-	else if (input.constructor.$bserializerclassid != null) {
-		var config = registrationsByIndex[input.constructor.$bserializerclassid];
-		var fieldName;
-		payload = {};
-		var entry = {};
-		entry[config.index] = payload;
-		output = {r:objectdb.set(input, entry)};
-		if (config.fields) {
-			for (var fieldIndex = 0; fieldIndex < config.fields.length; fieldIndex++) {
-				fieldName = config.fields[fieldIndex];
-				if (fieldName in input) {
-					if (typeof input[fieldName] !== 'function' && fieldName !== '$bserializerid') {
-						payload[fieldName] = serialize_old(input[fieldName], objectdb);
-					}
-				}
-			}
-		}
-		else if (config.not) {
-			for (fieldName in input) {
-				if (!(fieldName in config.not) && typeof input[fieldName] !== 'function' && fieldName !== '$bserializerid') {
-					payload[fieldName] = serialize_old(input[fieldName], objectdb);
-				}
-			}
-		}
-		else {
-			for (fieldName in input) {
-				if (typeof input[fieldName] !== 'function' && fieldName !== '$bserializerid') {
-					payload[fieldName] = serialize_old(input[fieldName], objectdb);
-				}
-			}
-		}
-	}
-	else if (global.Uint8Array && input instanceof global.Uint8Array) {
-		serializeArray('au8');
-	}
-	else if (global.Uint16Array && input instanceof global.Uint16Array) {
-		serializeArray('au16');
-	}
-	else if (global.Uint32Array && input instanceof global.Uint32Array) {
-		serializeArray('au32');
-	}
-	else if (global.Int8Array && input instanceof global.Int8Array) {
-		serializeArray('ai8');
-	}
-	else if (global.Int16Array && input instanceof global.Int16Array) {
-		serializeArray('ai16');
-	}
-	else if (global.Int32Array && input instanceof global.Int32Array) {
-		serializeArray('ai32');
-	}
-	else if (global.FloatArray && input instanceof global.FloatArray) {
-		serializeArray('af32');
-	}
-	else if (global.Float32Array && input instanceof global.Float32Array) {
-		serializeArray('af32');
-	}
-	else if (global.Float64Array && input instanceof global.Float64Array) {
-		serializeArray('af64');
-	}
-	else if (Array.isArray(input)) {
-		payload = [];
-		payload.length = input.length;
-		output = {r:objectdb.set(input, {a:payload})};
-		for (var index = 0 ; index < input.length; index++) {
-			payload[index] = serialize_old(input[index], objectdb);
-		}
-	}
-	else if (typeof input === 'number') {
-		output = {n:input};
-	}
-	else if (typeof input === 'object') {
-		payload = {};
-		if (input.constructor && input.constructor.name !== 'Object') {
-//			console.warn("Unregistered serializer? ", input.constructor.name || input.constructor);
-		}
-		output = {r:objectdb.set(input, {o:payload})};
-		for (fieldName in input) {
-			if (typeof input[fieldName] !== 'function' && fieldName !== '$bserializerid') {
-				payload[fieldName] = serialize_old(input[fieldName], objectdb);
-			}
-		}
-	}
-	else if (typeof input !== 'function') {
-		output = {v:input};
-	}
-	if (top_level) {
-		if (output === undefined) {
-			output = {};
-		}
-		output.d = objectdb.getFinalValues();
-	}
-	if (output != null && 'n' in output && output.n == null) {
-		console.error("Outputting null as a number?!" , input);
-	}
-	return output;
-}
-bserializer.serialize_old = serialize_old;
-
-function deserialize_old(input, objectdb_in, objectdb_out) {
-	if (input != null && input.d != null) {
-		objectdb_in = input.d;
-		delete input.d;
-		objectdb_out = [];
-		objectdb_out.length = objectdb_in.length;
-	}
-	else if (objectdb_out == null) {
-		objectdb_out = [];
-		objectdb_in = [];
-	}
-	var output;
-	var reference;
-	if (input != null && input.r != null) {
-		reference = input.r;
-		delete input.r;
-	}
-	if (reference != null && objectdb_out[reference] != null) {
-		output = objectdb_out[reference];
-		console.log("Using reference " + reference + " in output db");
-	}
-	else {
-//		if (reference != null) {
-//			console.log("Failed to find reference " + reference + " in output db");
-//		}
-		if (reference != null && objectdb_in[reference] != null) {
-			input = objectdb_in[reference];
-			delete input.i;
-		}
-		for (var type in input) {
-			var payload = input[type];
-			var n_type = parseInt(type, 10);
-			if (!isNaN(n_type)) {
-				var config = registrationsByIndex[n_type];
-				if (config.ctor_args) {
-					var params = [];
-					for (var argIndex = 0; argIndex < config.ctor_args.length ; argIndex++) {
-						var arg_field = config.ctor_args[argIndex]
-						var arg_value;
-						if (arg_field in payload) {
-							arg_value = deserialize_old(payload[arg_field], objectdb_in, objectdb_out);
-							delete payload[arg_field];
-						}
-						params.push(arg_value);
-					}
-					//Need to be able to call constructors with specific deserialized parameters.... !?
-					output = Object.create(config.ctor.prototype);
-					var ctor_output = config.ctor.apply(output, params);
-					if (Object(ctor_output) === ctor_output) {
-						output = ctor_output;
-					}
-				}
-				else {
-					output = new config.ctor();
-				}
-				if (reference != null) {
-					objectdb_out[reference] = output;
-				}
-				if (config.fields) {
-					for (var fieldIndex = 0; fieldIndex < config.fields.length; fieldIndex++) {
-						fieldName = config.fields[fieldIndex];
-						if (fieldName in payload) {
-							output[fieldName] = deserialize_old(payload[fieldName], objectdb_in, objectdb_out);
-						}
-					}
-				}
-				else if (config.not) {
-					for (fieldName in payload) {
-						if (!(fieldName in config.not)) {
-							output[fieldName] = deserialize_old(payload[fieldName], objectdb_in, objectdb_out);
-						}
-					}
-				}
-				else {
-					for (fieldName in payload) {
-						output[fieldName] = deserialize_old(payload[fieldName], objectdb_in, objectdb_out);
-					}
-				}
-			}
-			else {
-				function deserializeArray(type) {
-					output = new type(payload.length);
-					if (reference != null) {
-						objectdb_out[reference] = output;
-					}
-					for (var index = 0 ; index < payload.length ; index++) {
-						output[index] = deserialize_old(payload[index], objectdb_in, objectdb_out);
-					}
-					return output;
-				}
-				
-				switch (type) {
-					case 'u':
-						break;
-					case 'x': 
-						output = null;
-						break;
-					case 'a':
-						output = [];
-						output.length = payload.length;
-						if (reference != null) {
-							objectdb_out[reference] = output;
-						}
-						for (var index = 0 ; index < payload.length ; index++) {
-							output[index] = deserialize_old(payload[index], objectdb_in, objectdb_out);
-						}
-						break;
-					case 'af32':
-						deserializeArray(global.Float32Array || Array);
-						break;
-					case 'af64':
-						deserializeArray(global.Float64Array || Array);
-						break;
-					case 'ai8':
-						deserializeArray(global.Int8Array || Array);
-						break;
-					case 'ai16':
-						deserializeArray(global.Int16Array || Array);
-						break;
-					case 'ai32':
-						deserializeArray(global.Int32Array || Array);
-						break;
-					case 'au8':
-						deserializeArray(global.Uint8Array || Array);
-						break;
-					case 'au16':
-						deserializeArray(global.Uint16Array || Array);
-						break;
-					case 'au32':
-						deserializeArray(global.Uint32Array || Array);
-						break;
-					case 'o':
-						output = {};
-						if (reference != null) {
-							objectdb_out[reference] = output;
-						}
-						for (var fieldName in payload) {
-							output[fieldName] = deserialize_old(payload[fieldName], objectdb_in, objectdb_out);
-						}
-						break;
-					case 'n':
-					case 'v':
-						output = payload;
-						break;
-					default:
-						throw "Unknown type " + type;
-						break;
-				}
-			}
-		}
-	}
-//	if (output === undefined) {
-//		console.warn("Failed to deserialize ", input);
-//	}
-	return output;
-}
-bserializer.deserialize_old = deserialize_old;
 
 })(typeof exports === 'undefined'? this.bserializer = {}: exports);

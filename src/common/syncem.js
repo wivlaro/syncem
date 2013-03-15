@@ -292,6 +292,7 @@ Syncer.prototype.needsUpdate = function() {
 Syncer.prototype.update = function() {
 	var updated = false;
 	var now_tick = this.getNowTick();
+	var t0 = new Date().getTime();
 //	console.log("Updating ", this.dirty_tick, "->", now_tick);
 	while (this.dirty_tick < now_tick) {
 		var prev_tick = this.dirty_tick++;
@@ -360,6 +361,10 @@ Syncer.prototype.update = function() {
 			this.onUpdate();
 		}
 		updated = true;
+		if (new Date().getTime() > t0 + 1000) {
+			console.warn("Bailing out of update, taking too long!");
+			break;
+		}
 	}
 	now_tick = this.getNowTick();
 	if (this.dirty_tick + 1 < now_tick)  {
