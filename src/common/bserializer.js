@@ -16,12 +16,12 @@ var pp = {};
 var gensym_count = 0;
 function gensym(prefix) {
 	if (typeof prefix === 'string') {
-		prefix = prefix.replace(/[^a-z]/gi,'_');
+		prefix = prefix.replace(/^[^a-z]/gi,'_').replace(/[^a-z0-9]/gi,'_');
 	}
 	else {
 		prefix = 'gensym';
 	}
-	return prefix + (gensym_count++);
+	return prefix + '_' + (gensym_count++).toString(36);
 }
 
 Packet.prototype.readBoolean = function() { return this.readUint8() !== 0; };
@@ -723,6 +723,7 @@ ObjectConfig.prototype.makeExpansions = function() {
 				case 'string':
 					output_copy_direct(field);
 					break;
+				case 'array-rle':
 				case 'array':
 				case 'generic':
 					output_copy_generic(field);
@@ -893,8 +894,12 @@ function makeWriteReadExpansions(writes, reads, src, dst, field) {
 	}
 }
 
-function ArrayConfig(name) {
+function ArrayConfig(name, properties) {
 	BaseConfig.call(this, name);
+	this.rle = false;
+	if (properties) for (var prop in properties) {
+		this[prop] = properties[prop];
+	}
 }
 ArrayConfig.prototype = new BaseConfig();
 ArrayConfig.prototype.constructor = ArrayConfig;
@@ -925,38 +930,80 @@ ArrayConfig.prototype.write = function(p, src, objectdb) {
 };
 
 
-ArrayConfig.prototype.makeWriteReadExpansion = function (writes, reads, write_src, read_dst, field) {
+ArrayConfig.prototype.makeWriteReadExpansion = function (write, read, write_src, read_dst, field) {
 	
 	var i = gensym('i');
 	var l = gensym('l');
 	var src = gensym(write_src);
-	var element_writes = [];
-	var element_reads = [];
-	makeWriteReadExpansions(element_writes, element_reads, src + '[' + i + ']', read_dst + '[' + i + ']', field.element);
+	var el_src = gensym(src + '_' + i);
+	var rl = gensym('rl');
+	var element_write = [];
+	var element_read = [];
 	
-	array_append(writes, expand_template(
-			"var @src = @src_expr, @l = @src.length;",
-			"p.writeSmartUint(@l);",
-			"for (var @i = 0; @i < @l; @i++) {",
-			'console.log("Writing " + @i + "/" + @l + ": " + src[@i])',
-			element_writes,
-			"}",
-			{
-				src:src,
-				src_expr:write_src,
-				i:i,
-				l:l
-			}
-		));
+	makeWriteReadExpansions(element_write, element_read, el_src, read_dst + '[' + i + ']', field.element);
+	
+	if (this.rle) {
+		array_append(write, expand_template(
+				"var @rl = 0;",
+				"var @src = @src_expr, @l = @src.length, @el_src;",
+				"p.writeSmartUint(@l);",
+				"for (var @i = 0; @i < @l; @i++) {",
+				"	if (@i === 0) {",
+				"		@el_src = @src[@i];",
+				"	}",
+				"	else if (@src[@i] === @el_src) {",
+				"		@rl++;",
+				"	}",
+				"	else {",
+				'		console.log("Writing x" + @rl + " (up to " + @i + "/" + @l + ") of " + @el_src);',
+				"		p.writeSmartUint(@rl);",
+				element_write,
+				'		@el_src = @src[@i];',
+				'		@rl = 0;',
+				"	}",
+				"}",
+				{
+					el_src:el_src,
+					src:src,
+					src_expr:write_src,
+					i:i,
+					l:l,
+					rl:rl
+				}
+			));
+	}
+	else {
+		array_append(write, expand_template(
+				"var @src = @src_expr, @l = @src.length, @el_src;",
+				"p.writeSmartUint(@l);",
+				"for (var @i = 0; @i < @l; @i++) {",
+				'	@el_src = @src[@i];',
+				'	console.log("Writing " + @i + "/" + @l + ": " + @el_src);',
+				element_write,
+				"}",
+				{
+					el_src:el_src,
+					src:src,
+					src_expr:write_src,
+					i:i,
+					l:l
+				}
+			));
+	}
 			
-	array_append(reads, expand_template(
+	if (this.sparse) {
+		write.push("p.writeSmartUint(@rl);");
+		write.push("p.writeSmartUint(@rv);");
+	}
+			
+	array_append(read, expand_template(
 			"var @l = p.readSmartUint();",
 			"if (@dst == null || @dst.length !== @l) {",
 			"	@dst = [];",
 			"	@dst.length = @l;",
 			"}",
 			"for (var @i = 0; @i < @l; @i++) {",
-			element_reads,
+			element_read,
 			"}",
 			{
 				dst:read_dst,
@@ -964,10 +1011,6 @@ ArrayConfig.prototype.makeWriteReadExpansion = function (writes, reads, write_sr
 				l:l
 			}
 		));
-};
-
-ArrayConfig.prototype.makeWriteExpansion = function (src_expr, field) {
-	return ;
 };
 
 ArrayConfig.prototype.read = function(p, dst, objectdb) {
@@ -1077,6 +1120,7 @@ registerClass(new PrimitiveConfig('smartuint', {
 
 registerClass(new ObjectConfig({name:'object', noAnnotate:true, noExpand:true}));
 registerClass(new ArrayConfig('array'));
+registerClass(new ArrayConfig('array-rle', {rle:true}));
 
 registerClass(new TypedArrayConfig("Int8"));
 registerClass(new TypedArrayConfig("Uint8"));
