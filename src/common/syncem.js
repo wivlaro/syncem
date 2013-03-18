@@ -253,7 +253,7 @@ Syncer.prototype.addMove = function(move, allowFuture) {
 			if (!(move.tick in this.queuedMoves)) {
 				this.queuedMoves[move.tick] = {};
 			}
-			console.log("Enqueued move ", move);
+			console.log("Enqueued move @" + move.tick + ": " + move.id + " " + move.constructor.name);
 			this.queuedMoves[move.tick][move.id] = move;
 		}
 		else {

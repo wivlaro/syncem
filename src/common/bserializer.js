@@ -5,12 +5,16 @@ function Packet(arrayBuffer) {
 	this.offset = 0;
 }
 
+Packet.prototype.reset = function () {
+	this.offset = 0;
+};
+
 Packet.prototype.getDelivery = function() {
 	return this.impl.buffer.slice(0, this.offset);
 };
 
 var PACKET_DEBUG = false;
-var PACKET_PROFILE = true;
+var PACKET_PROFILE = false;
 var pp = {};
 
 var gensym_count = 0;
@@ -25,7 +29,7 @@ function gensym(prefix) {
 }
 
 Packet.prototype.readBoolean = function() { return this.readUint8() !== 0; };
-Packet.prototype.writeBoolean = function(value) { this.writeUint8(value ? 1 : 0); };
+Packet.prototype.writeBoolean = function(value) { this.writeUint8(value ? 1 : 0); return value; };
 
 Packet.prototype.readInt8   = function() { var value = this.impl.getInt8   (this.offset); this.offset++;    return value; };
 Packet.prototype.readUint8  = function() { var value = this.impl.getUint8  (this.offset); this.offset++;    return value; };
@@ -71,6 +75,7 @@ Packet.prototype.writeSmartUint = function(value) {
 		this.writeUint8(value & 0xff);
 		return;
 	}
+	console.trace();
 	throw "Value too large for smart uint: " + value + " over";
 };
 
@@ -285,59 +290,23 @@ function registerClass(config) {
 		config.ctor.$bserializerclassid = config.index;
 	}
 	if (config.name) {
+//		console.log("Registering config:",config.name);
 		registrationsByName[config.name] = config;
 	}
 	registrationsByIndex.push(config);
 }
 bserializer.registerClass = registerClass;
 
-function expand_template() {
-	var strings = [];
-	var replacements = {};
-	for (var i = 0; i < arguments.length; i++) {
-		var arg = arguments[i];
-		//Strings are the templates
-		if (typeof arg === 'string') {
-			if (typeof strings === 'undefined') strings = [];
-			strings.push(arg);
-		}
-		else if (Array.isArray(arg)) {
-			if (typeof strings === 'undefined') strings = arg;
-			else strings = strings.concat(arg);
-		}
-		else if (typeof arg === 'object') {
-			for (var k in arg) {
-				replacements[k] = arg[k];
-			}
-		}
-	}
-	for (var i = 0, l = strings.length; i < l; i++) {
-		for (var k in replacements) {
-			strings[i] = strings[i].replace(new RegExp('@'+k+'\\b@?', 'g'), arg[k]);
-		}
-	}
-	return strings;
-}
-
-function array_append(a1, a2) {
-	a1.splice.apply(a1, [a1.length, 0].concat(a2));
-}
-
-function for_each(a, f) {
-	for (var i = 0, l = a.length; i < l; i++) f(a[i]);
-}
-function map(a, f) {
-	var r = []; r.length = a.length;
-	for (var i = 0, l = a.length; i < l; i++) r[i] = f(a[i]);
-	return r;
-}
-
 function BaseConfig(name) {
 	this.name = name;
 	this.index = -1;
 }
 BaseConfig.prototype.equals = function (self, other) {
-	return self === other;
+	var equal = self === other;
+	if (!equal) {
+		console.warn("Inequal:", equals_path.join('.'), self, "!=", other);
+	}
+	return equal;
 };
 
 function LiteralConfig(name, value) {
@@ -389,12 +358,12 @@ PrimitiveConfig.prototype.typeCapitalised = function() {
 PrimitiveConfig.prototype.makeExpansions = function() {
 	var expansion = {Type:this.typeCapitalised()};
 	return {
-		write: expand_template(
+		write: autil.expand_template(
 			"function write@Type(p, src) {",
 			"	p.write@Type(src);",
 			"}",
 			expansion),
-		read: expand_template(
+		read: autil.expand_template(
 			"function read@Type(p) {",
 			"	return p.read@Type();",
 			"}",
@@ -449,25 +418,29 @@ ObjectConfig.prototype.constructor = ObjectConfig;
 
 var equals_path = [];
 
-function equalsOffset(self, other, offset) {
+function equalsOffset(self, other, offset, depth, objectdb) {
 	var equals = true;
-	equals_path.push(offset);
-	if (!equalsGeneric(self[offset], other[offset])) {
-		console.warn("Inequal:", equals_path.join('.'), self[offset], "!=", other[offset]);
+	equals_path[depth] = offset;
+//	typeof offset === 'string' && console.log(equals_path.join('.'));
+	if (!equalsGeneric(self[offset], other[offset], objectdb)) {
 		equals = false;
 	}
-	equals_path.pop();	
 	return equals;
 }
 
-ObjectConfig.prototype.equals = function (self, other) {
+ObjectConfig.prototype.equals = function (self, other, objectdb) {
 	if (self === other) return true;
+	if (other == null) {
+		console.warn(equals_path.join('.') + " failure, other == " + other);
+		return false;
+	}
 	var equals = true;
 	
+	var depth = equals_path.length;
 	if (this.ctor_args) {
 		for (var idx = 0; idx < this.ctor_args.length ; idx ++ ) {
 			var f = this.ctor_args[idx];
-			if (!equalsOffset(self, other, f)) equals = false;
+			if (!equalsOffset(self, other, f, depth, objectdb)) equals = false;
 		}
 	}
 	if (this.fields != null) {
@@ -475,22 +448,23 @@ ObjectConfig.prototype.equals = function (self, other) {
 			var field = this.fields[i];
 			if (!(this.ctor_args && this.ctor_args.indexOf(field.name) !== -1)) {
 				var f = field.name;
-				if (!equalsOffset(self, other, f)) equals = false;
+				if (!equalsOffset(self, other, f, depth, objectdb)) equals = false;
 			}
 		}
 	}
 	else {
 		for (var f in other) {
 			if (typeof other[f] !== 'function' && !(this.not && (f in this.not)) && !(this.ctor_args && this.ctor_args.indexOf(f) !== -1)) {
-				if (!equalsOffset(self, other, f)) equals = false;
+				if (!equalsOffset(self, other, f, depth, objectdb)) equals = false;
 			}
 		}
 	}
+	equals_path.length = depth;
 	return equals;
 };
 
 ObjectConfig.prototype.write = function(p, src, objectdb) {
-	console.log("Writing @"+p.offset+": "+JSON.stringify(this));
+//	console.log("Writing @"+p.offset+": "+JSON.stringify(this));
 	if (this.circular) {
 		var b_already_written = typeof src.$bserializer_writeIndex !== 'undefined';
 		p.writeBoolean(b_already_written);
@@ -503,8 +477,14 @@ ObjectConfig.prototype.write = function(p, src, objectdb) {
 			objectdb.push(src);
 		}
 	}
+	if (typeof this.onPreWriteFields !== 'undefined') {
+		this.onPreWriteFields(p, src, objectdb);
+	}
 	this.writeCtorArgs(p, src, objectdb);
 	this.writeFields(p, src, objectdb);
+	if (typeof this.onPostWriteFields !== 'undefined') {
+		this.onPostWriteFields(p, src, objectdb);
+	}
 };
 ObjectConfig.prototype.writeCtorArgs = function (p, src, objectdb) {
 	if (this.ctor_args) {
@@ -518,7 +498,7 @@ ObjectConfig.prototype.writeFields = function (p, src, objectdb) {
 	if (this.fields != null) {
 		for (var i = 0, l = this.fields.length; i < l; i++) {
 			var field = this.fields[i];
-			if (!(this.ctor_args && this.ctor_args.indexOf(field.name) !== -1)) {
+			if (!(this.ctor_args && this.ctor_args.indexOf(field.name) !== -1) && field.serialize !== false) {
 				var f = field.name;
 				writeGeneric(p, src[f], objectdb);
 			}
@@ -527,13 +507,19 @@ ObjectConfig.prototype.writeFields = function (p, src, objectdb) {
 	else {
 		var n = 0;
 		for (var f in src) {
-			if (f !== '$bserializer_writeIndex' && typeof src[f] !== 'function' && !(this.not && (f in this.not)) && !(this.ctor_args && this.ctor_args.indexOf(f) !== -1)) {
+			if (f !== '$bserializer_writeIndex'
+					&& typeof src[f] !== 'function'
+					&& !(this.not && (f in this.not))
+					&& !(this.ctor_args && this.ctor_args.indexOf(f) !== -1)) {
 				n++;
 			}
 		}
 		p.writeSmartUint(n);
 		for (var f in src) {
-			if (f !== '$bserializer_writeIndex' && typeof src[f] !== 'function' && !(this.not && (f in this.not)) && !(this.ctor_args && this.ctor_args.indexOf(f) !== -1)) {
+			if (f !== '$bserializer_writeIndex'
+					&& typeof src[f] !== 'function'
+					&& !(this.not && (f in this.not))
+					&& !(this.ctor_args && this.ctor_args.indexOf(f) !== -1)) {
 				p.writeString(f);
 				writeGeneric(p, src[f], objectdb);
 			}
@@ -555,8 +541,8 @@ ObjectConfig.prototype.readCtorArgs = function(p, dst, objectdb) {
 
 ObjectConfig.prototype.read = function(p, dst, objectdb) {
 	if (this.circular) {
-		var b_already_written = p.readBoolean();
-		if (b_already_written) {
+		var b_already_read = p.readBoolean();
+		if (b_already_read) {
 			var reference = p.readSmartUint();
 			dst = objectdb[reference];
 //			console.log("read circular object @", reference, this.name || this.ctor.name || this.index);
@@ -593,7 +579,13 @@ ObjectConfig.prototype.read = function(p, dst, objectdb) {
 		objectdb.push(dst);
 //		console.log("read new circular ref @", reference, this.name || this.ctor.name || this.index);
 	}
+	if (typeof this.onPreReadFields !== 'undefined') {
+		this.onPreReadFields(p, dst, objectdb);
+	}
 	this.readFields(p, dst, objectdb);
+	if (typeof this.onPostReadFields !== 'undefined') {
+		this.onPostReadFields(p, dst, objectdb);
+	}
 	return dst;
 };
 
@@ -601,7 +593,7 @@ ObjectConfig.prototype.readFields = function(p, dst, objectdb) {
 	if (this.fields != null) {
 		for (var i = 0, l = this.fields.length; i < l; i++) {
 			var field = this.fields[i];
-			if (!(this.ctor_args && this.ctor_args.indexOf(field.name) !== -1)) {
+			if (!(this.ctor_args && this.ctor_args.indexOf(field.name) !== -1) && field.serialize !== false) {
 				dst[field.name] = readGeneric(p, dst[field.name], objectdb);
 			}
 		}
@@ -691,7 +683,7 @@ ObjectConfig.prototype.makeExpansions = function() {
 		readFields:[]
 	};
 	
-	bodies.writeFields.push("console.log('Writing fields for " + JSON.stringify(this)+"');");
+//	bodies.writeFields.push("console.log('Writing fields for " + JSON.stringify(this)+"');");
 	
 	if (this.circular) {
 		bodies.copy.push('var dst_orig = this.getCopyCircular(dst, src, objectdb);');
@@ -710,7 +702,10 @@ ObjectConfig.prototype.makeExpansions = function() {
 			output_copy_generic(field);
 		}
 		else if (typeof field.type === 'string') {
-			switch (field.type) {
+			if (field.type in registrationsByName) {
+				output_copy_generic(field);
+			}
+			else switch (field.type) {
 				case 'boolean':
 				case 'int8':
 				case 'int16':
@@ -745,7 +740,7 @@ ObjectConfig.prototype.makeExpansions = function() {
 	bodies.copy.push('	dst=new this.ctor(' + ctor_params.join(',') + ');');
 	var any_static = false;
 	if (this.fields) {
-		for_each(this.fields, function(field) {
+		autil.for_each(this.fields, function(field) {
 			if (field.static) {
 				output_copy_by_type(field);
 				any_static = true;
@@ -755,7 +750,7 @@ ObjectConfig.prototype.makeExpansions = function() {
 	bodies.copy.push('}');
 	if (any_static) {
 		bodies.copy.push('else {');
-		for_each(this.fields, function(field) {
+		autil.for_each(this.fields, function(field) {
 			if (field.static) {
 				output_copy_direct(field);
 			}
@@ -767,7 +762,7 @@ ObjectConfig.prototype.makeExpansions = function() {
 	}
 	var read_write_written = {};
 	function output_field_write_read(writes, reads, field, ctor_mode) {
-		if (field.name in read_write_written) return;
+		if (field.name in read_write_written || field.serialize === false) return;
 		read_write_written[field.name] = true;
 		var read_dst;
 		if (ctor_mode) {
@@ -785,7 +780,7 @@ ObjectConfig.prototype.makeExpansions = function() {
 		var fields = this.fields;
 		bodies.writeCtorArgs = [];
 		bodies.readCtorArgs = [];
-		var read_dsts = map(this.ctor_args, function (ctor_arg_name) {
+		var read_dsts = autil.map(this.ctor_args, function (ctor_arg_name) {
 			var read_dst;
 			if (fields) {
 				for (var i = 0, l = fields.length; i < l; i++) {
@@ -804,7 +799,7 @@ ObjectConfig.prototype.makeExpansions = function() {
 		bodies.readCtorArgs.push('return [' + read_dsts.join(',') + '];');
 	}
 	if (this.fields) {
-		for_each(this.fields, function(field) {
+		autil.for_each(this.fields, function(field) {
 			if (!field.static) {
 				output_copy_by_type(field);
 			}
@@ -851,9 +846,9 @@ function getTypeConfig(field_type) {
 }
 
 function makeWriteReadExpansions(writes, reads, src, dst, field) {
-	writes.push("console.log('Writing " + src + "');");
+//	writes.push("console.log('Writing " + src + "');");
 	if (field && Array.isArray(field.type)) {
-		var configs = map(field.type, getTypeConfig);
+		var configs = autil.map(field.type, getTypeConfig);
 		reads.push('switch (p.readUint8()) {');
 		for (var i = 0, l = configs.length; i < l; i++) {
 			var config = configs[i];
@@ -863,7 +858,7 @@ function makeWriteReadExpansions(writes, reads, src, dst, field) {
 				type_check = config.makeTypeCheck(src);
 			}
 			else {
-				type_check = src + ' != null && ' + src + '.constructor === this.ctor';
+				type_check = src + ' != null && ' + src + '.constructor === bserializer.registrationsByIndex[' + config.index + '].ctor';
 			}
 			
 			writes.push((i > 0 ? 'else if' : 'if') + " (" + type_check + ") {");
@@ -875,7 +870,7 @@ function makeWriteReadExpansions(writes, reads, src, dst, field) {
 		}
 
 		writes.push("else {");
-		writes.push("\tthrow 'Unhandled type on write';");
+		writes.push("\tthrow 'Unhandled type on write ' + (" + src + " && " + src + ".constructor);");
 		writes.push('}');
 
 		reads.push("\tdefault:");
@@ -904,7 +899,7 @@ function ArrayConfig(name, properties) {
 ArrayConfig.prototype = new BaseConfig();
 ArrayConfig.prototype.constructor = ArrayConfig;
 
-ArrayConfig.prototype.equals = function(self, other) {
+ArrayConfig.prototype.equals = function(self, other, objectdb) {
 	if (!Array.isArray(other)) {
 		console.warn(equals_path.join('.') + " not an array");
 		return false;
@@ -914,11 +909,13 @@ ArrayConfig.prototype.equals = function(self, other) {
 		return false;
 	}
 	var equals = true;
+	var depth = equals_path.length;
 	for (var i = 0, l = self.length; i < l ; i++) {
-		if (!equalsOffset(self, other, i)) {
+		if (!equalsOffset(self, other, i, depth, objectdb)) {
 			equals = false;
 		}
 	}
+	equals_path.length = depth;
 	return equals;
 };
 
@@ -935,82 +932,101 @@ ArrayConfig.prototype.makeWriteReadExpansion = function (write, read, write_src,
 	var i = gensym('i');
 	var l = gensym('l');
 	var src = gensym(write_src);
-	var el_src = gensym(src + '_' + i);
-	var rl = gensym('rl');
+	var el_write_src = gensym(write_src);
+	var el_read_dst = gensym(read_dst);
 	var element_write = [];
 	var element_read = [];
 	
-	makeWriteReadExpansions(element_write, element_read, el_src, read_dst + '[' + i + ']', field.element);
+	makeWriteReadExpansions(element_write, element_read, el_write_src, el_read_dst, field.element);
 	
 	if (this.rle) {
-		array_append(write, expand_template(
-				"var @rl = 0;",
-				"var @src = @src_expr, @l = @src.length, @el_src;",
-				"p.writeSmartUint(@l);",
-				"for (var @i = 0; @i < @l; @i++) {",
-				"	if (@i === 0) {",
-				"		@el_src = @src[@i];",
-				"	}",
-				"	else if (@src[@i] === @el_src) {",
-				"		@rl++;",
-				"	}",
-				"	else {",
-				'		console.log("Writing x" + @rl + " (up to " + @i + "/" + @l + ") of " + @el_src);',
-				"		p.writeSmartUint(@rl);",
-				element_write,
-				'		@el_src = @src[@i];',
-				'		@rl = 0;',
-				"	}",
-				"}",
-				{
-					el_src:el_src,
-					src:src,
-					src_expr:write_src,
-					i:i,
-					l:l,
-					rl:rl
-				}
-			));
-	}
-	else {
-		array_append(write, expand_template(
-				"var @src = @src_expr, @l = @src.length, @el_src;",
-				"p.writeSmartUint(@l);",
-				"for (var @i = 0; @i < @l; @i++) {",
-				'	@el_src = @src[@i];',
-				'	console.log("Writing " + @i + "/" + @l + ": " + @el_src);',
-				element_write,
-				"}",
-				{
-					el_src:el_src,
-					src:src,
-					src_expr:write_src,
-					i:i,
-					l:l
-				}
-			));
-	}
+		autil.array_append(write, autil.expand_template(
+			"var @src = @src_expr, @l = @src.length, @el_src;",
+			"p.writeSmartUint(@l);",
+			"var @i = 0, @block_start = 0;",
+			"while (true) {",
+			"	if (@i === @block_start) {",
+			"		@el_src = @src[@i];",
+			"	}",
+			"	@i++;",
+			"	if (@i === @l || @src[@i] !== @el_src) {",
+			"		p.writeSmartUint(@i - @block_start - 1);", //-1 because we can't write 0 elements
+			autil.indent("		", element_write),
+			"		@block_start = @i;",
+			"		if (@i === @l) break;",
+			"	}",
+			"}",
+			{
+				el_src:el_write_src,
+				src:src,
+				src_expr:write_src,
+				i:i,
+				l:l,
+				block_start:gensym('block_start')
+			}
+		));
 			
-	if (this.sparse) {
-		write.push("p.writeSmartUint(@rl);");
-		write.push("p.writeSmartUint(@rv);");
-	}
-			
-	array_append(read, expand_template(
+		autil.array_append(read, autil.expand_template(
 			"var @l = p.readSmartUint();",
 			"if (@dst == null || @dst.length !== @l) {",
 			"	@dst = [];",
 			"	@dst.length = @l;",
 			"}",
-			"for (var @i = 0; @i < @l; @i++) {",
-			element_read,
+			"for (var @i = 0, @next_read = 0, @el_dst; @i < @l; @i++) {",
+			"	if (@i === @next_read) {",
+			"		@next_read += 1 + p.readSmartUint();",
+			"		@el_dst = @dst[@i];",
+			autil.indent("		",element_read),
+			"		console.log('Read @dst until ' + @next_read + '/' + @l + ':' + @el_dst);",
+			"	}",
+			"	@dst[@i] = @el_dst;",
 			"}",
 			{
+				next_read:gensym('next_read'),
+				el_dst:el_read_dst,
 				dst:read_dst,
 				i:i,
 				l:l
 			}
 		));
+	}
+	else {
+		autil.array_append(write, autil.expand_template(
+			"var @src = @src_expr, @l = @src.length;",
+			"p.writeSmartUint(@l);",
+			"for (var @i = 0, @el_src; @i < @l; @i++) {",
+			'	@el_src = @src[@i];',
+//			'	console.log("Writing " + @i + "/" + @l + ": " + @el_src);',
+			autil.indent('	',element_write),
+			"}",
+			{
+				el_src:el_write_src,
+				src:src,
+				src_expr:write_src,
+				i:i,
+				l:l
+			}
+		));
+			
+		autil.array_append(read, autil.expand_template(
+			"var @l = p.readSmartUint();",
+			"if (@dst == null || @dst.length !== @l) {",
+			"	@dst = [];",
+			"	@dst.length = @l;",
+			"}",
+			"for (var @i = 0, @el_dst; @i < @l; @i++) {",
+			"	@el_dst = @dst[@i];",
+			autil.indent('	',element_read),
+			"	@dst[@i] = @el_dst;",
+			"}",
+			{
+				el_dst:el_read_dst,
+				dst:read_dst,
+				i:i,
+				l:l
+			}
+		));
+	}
 };
 
 ArrayConfig.prototype.read = function(p, dst, objectdb) {
@@ -1023,9 +1039,6 @@ ArrayConfig.prototype.read = function(p, dst, objectdb) {
 		dst[i] = readGeneric(p, dst[i], objectdb);
 	}
 	return dst;
-};
-
-ArrayConfig.prototype.makeReadExpansion = function (dst, field) {
 };
 
 ArrayConfig.prototype.copy = function (dst, src, objectdb) {
@@ -1056,7 +1069,7 @@ TypedArrayConfig.prototype.makeExpansions = function() {
 		Prefix: this.prefix
 	};
 	return {
-		write: expand_template(
+		write: autil.expand_template(
 			"function write@Prefix(p,src) {",
 			"	var l = src.length;",
 			"	p.writeSmartUint(l);",
@@ -1065,7 +1078,7 @@ TypedArrayConfig.prototype.makeExpansions = function() {
 			"	}",
 			"}",
 			expansion),
-		read: expand_template(
+		read: autil.expand_template(
 			"function read@Prefix(p,dst) {",
 			"	var l = p.readSmartUint();",
 			"	if (dst == null || dst.constructor !== @Prefix@Array || dst.length !== l) {",
@@ -1077,7 +1090,7 @@ TypedArrayConfig.prototype.makeExpansions = function() {
 			"	return dst;",
 			"}",
 			expansion),
-		copy: expand_template(
+		copy: autil.expand_template(
 			"function copy@Prefix(dst,src,objectdb) {",
 			"	if (src == null) {",
 			"		dst = src;",
@@ -1270,8 +1283,29 @@ function copyGeneric(dst, src, objectdb) {
 }
 bserializer.copyGeneric = copyGeneric;
 
-function equalsGeneric(self, other) {
-	return detectConfig(self).equals(self, other);
+function equalsGeneric(self, other, objectdb) {
+	var is_top_level = typeof objectdb === 'undefined';
+	if (is_top_level) {
+		objectdb = [];
+	}
+	if (typeof self === 'object' && self !== null) {
+		if (typeof self.$bserializer_equalsid === 'undefined') {
+			self.$bserializer_equalsid = objectdb.length;
+			objectdb.push(self);
+		}
+		else {
+			//Will be detected false elsewhere
+			return true;
+		}
+	}
+	var config = detectConfig(self);
+	var equal = config.equals(self, other, objectdb);
+	if (is_top_level) {
+		autil.for_each(objectdb, function(obj) {
+			delete obj.$bserializer_equalsid;
+		});
+	}
+	return equal;
 }
 bserializer.readGeneric = readGeneric;
 
@@ -1288,7 +1322,8 @@ function writeGeneric(p, src, objectdb) {
 		}
 	}
 	else if (typeof src !== 'function') {
-		console.warn("Failed to get config of ", require('util').inspect(src));
+		throw("Failed to get config of ", require('util').inspect(src));
+//		console.warn("Failed to get config of ", require('util').inspect(src));
 	}
 	if (top_level) {
 		for (var i = 0, l = objectdb.length; i < l; i++) {
@@ -1314,7 +1349,7 @@ bserializer.readGeneric = readGeneric;
 
 function serialize(obj) {
 	if (PACKET_PROFILE) pp = {};
-	packet.offset = 0;
+	packet.reset();
 	bserializer.writeGeneric(packet, obj);
 	if (PACKET_PROFILE) {
 		var a = [];
@@ -1326,7 +1361,15 @@ function serialize(obj) {
 		});
 		console.log("serialize bytes=" + packet.offset, a);
 	}
-	return packet.getDelivery();
+	var delivery = packet.getDelivery();
+	
+	packet.reset();
+	var obj2 = bserializer.readGeneric(packet, null);
+	if (!equalsGeneric(obj, obj2)) {
+		console.error("Failed to re-read");
+	}
+	
+	return delivery;
 }
 
 bserializer.serialize = serialize;
