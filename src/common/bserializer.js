@@ -727,6 +727,10 @@ ObjectConfig.prototype.makeExpansions = function() {
 					throw "Unknown field type " + field.type;
 			}
 		}
+		else {
+			output_copy_generic(field);
+//			throw "Unknown field type " + field.type;
+		}
 	}
 
 	bodies.copy.push('if (dst == null) {');
@@ -798,6 +802,9 @@ ObjectConfig.prototype.makeExpansions = function() {
 		});
 		bodies.readCtorArgs.push('return [' + read_dsts.join(',') + '];');
 	}
+	if (typeof this.onPreCopyFields !== 'undefined') {
+		bodies.copy.push('this.onPreCopyFields(dst, src, objectdb);');
+	}
 	if (this.fields) {
 		autil.for_each(this.fields, function(field) {
 			if (!field.static) {
@@ -808,6 +815,9 @@ ObjectConfig.prototype.makeExpansions = function() {
 	}
 	else {
 		bodies.copy.push('this.copyFields(dst, src, objectdb);');
+	}
+	if (typeof this.onPostCopyFields !== 'undefined') {
+		bodies.copy.push('this.onPostCopyFields(dst, src, objectdb);');
 	}
 	bodies.copy.push('return dst;');
 //	console.log("Expanding copy for ", this);
@@ -1307,7 +1317,7 @@ function equalsGeneric(self, other, objectdb) {
 	}
 	return equal;
 }
-bserializer.readGeneric = readGeneric;
+bserializer.equalsGeneric = equalsGeneric;
 
 function writeGeneric(p, src, objectdb) {
 	var top_level = typeof objectdb === 'undefined';

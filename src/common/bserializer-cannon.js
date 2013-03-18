@@ -67,8 +67,13 @@ bserializer.registerClass(CANNON.Box, {
 		'halfExtents'
 //		['convexPolyhedronRepresentation', 'depends', 'halfExtents']
 //		{name:'convexPolyhedronRepresentation', static:true}
-		])
-	});
+		]),
+	onPostReadFields:function(p,dst,objectdb) {
+//		console.log("Box Config onPostReadFields ",dst.boundingSphereRadius,dst.boundingSphereRadiusNeedsUpdate);
+		//Ensure it gets updated
+		dst.getBoundingSphereRadius();
+	}
+});
 bserializer.registerClass(CANNON.Plane, {fields:shape_fields.slice()});
 bserializer.registerClass(CANNON.Sphere, {fields:shape_fields.concat([{name:'radius', type:'float64'}])});
 bserializer.registerClass(CANNON.Compound, {fields:shape_fields.concat(['childShapes', 'childOffsets', 'childOrientations'])});
