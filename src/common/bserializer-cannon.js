@@ -1,6 +1,6 @@
 
 var particle_fields = [
-	{name: 'id', type: ['undefined','int32']},
+	{name: 'index', type: ['undefined','int32']},
 	{name: 'type', type: 'string'},
 	{name: 'mass', type: 'float64'},
 	{name: 'invMass', type: 'float64'},
@@ -40,13 +40,13 @@ bserializer.registerClass(CANNON.RigidBody, {
 		'adust_building'])
 });
 CANNON.RigidBody.prototype.writeStaticBodyStateFields = function(p, objectdb) {
-	p.writeSmartUint(this.id);
+	p.writeSmartUint(this.index);
 	p.writeUint8(this.sleepState);
 	p.writeFloat64(this.timeLastSleepy);
 };
 
 CANNON.RigidBody.prototype.readStaticBodyStateFields = function(p, objectdb) {
-	this.id = p.readSmartUint();
+	this.index = p.readSmartUint();
 	this.sleepState = p.readUint8();
 	this.timeLastSleepy = p.readFloat64();
 };
@@ -68,6 +68,10 @@ bserializer.registerClass(CANNON.Box, {
 //		['convexPolyhedronRepresentation', 'depends', 'halfExtents']
 //		{name:'convexPolyhedronRepresentation', static:true}
 		]),
+	onPreWriteFields:function(p,src,objectdb) {
+		//Ensure it gets updated (mainly for comparison)
+		src.getBoundingSphereRadius();
+	},
 	onPostReadFields:function(p,dst,objectdb) {
 //		console.log("Box Config onPostReadFields ",dst.boundingSphereRadius,dst.boundingSphereRadiusNeedsUpdate);
 		//Ensure it gets updated
@@ -110,7 +114,8 @@ bserializer.registerClass(CANNON.World, {
 		{name: 'nextId', type: 'int32'},
 		{name: 'allowSleep', type: 'boolean', serialize:false},
 		{name: 'defaultContactMaterial', serialize:false},
-		{name: 'collision_matrix', type: 'array-rle'},
+		{name: 'collisionMatrix', type: 'array-rle'},
+		{name: 'collisionMatrixPrevious', type: 'array-rle'},
 		{name: 'gravity', type: CANNON.Vec3, serialize:false},
 		{name: 'bodies', type: 'array', element:{type:[CANNON.Particle, CANNON.RigidBody]}, serialize:false}
 	]

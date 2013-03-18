@@ -856,7 +856,7 @@ function getTypeConfig(field_type) {
 }
 
 function makeWriteReadExpansions(writes, reads, src, dst, field) {
-//	writes.push("console.log('Writing " + src + "');");
+//	writes.push("console.log('Writing " + src + ": ' + ("+src+" ? "+src+".length : "+src+"));");
 	if (field && Array.isArray(field.type)) {
 		var configs = autil.map(field.type, getTypeConfig);
 		reads.push('switch (p.readUint8()) {');
@@ -954,12 +954,13 @@ ArrayConfig.prototype.makeWriteReadExpansion = function (write, read, write_src,
 			"var @src = @src_expr, @l = @src.length, @el_src;",
 			"p.writeSmartUint(@l);",
 			"var @i = 0, @block_start = 0;",
-			"while (true) {",
+			"if (@l > 0) while (true) {",
 			"	if (@i === @block_start) {",
 			"		@el_src = @src[@i];",
 			"	}",
 			"	@i++;",
 			"	if (@i === @l || @src[@i] !== @el_src) {",
+//			"		console.log('Write @src from ' + @block_start + '-' + @i + '/' + @l + ':' + @el_src);",
 			"		p.writeSmartUint(@i - @block_start - 1);", //-1 because we can't write 0 elements
 			autil.indent("		", element_write),
 			"		@block_start = @i;",
@@ -987,7 +988,7 @@ ArrayConfig.prototype.makeWriteReadExpansion = function (write, read, write_src,
 			"		@next_read += 1 + p.readSmartUint();",
 			"		@el_dst = @dst[@i];",
 			autil.indent("		",element_read),
-			"		console.log('Read @dst until ' + @next_read + '/' + @l + ':' + @el_dst);",
+//			"		console.log('Read @dst until ' + @next_read + '/' + @l + ':' + @el_dst);",
 			"	}",
 			"	@dst[@i] = @el_dst;",
 			"}",
@@ -1357,7 +1358,7 @@ function readGeneric(p, dst, objectdb) {
 }
 bserializer.readGeneric = readGeneric;
 
-function serialize(obj) {
+function serialize(obj, test) {
 	if (PACKET_PROFILE) pp = {};
 	packet.reset();
 	bserializer.writeGeneric(packet, obj);
@@ -1372,13 +1373,12 @@ function serialize(obj) {
 		console.log("serialize bytes=" + packet.offset, a);
 	}
 	var delivery = packet.getDelivery();
-	
-	packet.reset();
-	var obj2 = bserializer.readGeneric(packet, null);
-	if (!equalsGeneric(obj, obj2)) {
-		console.error("Failed to re-read");
+	if (test) {
+		var obj2 = bserializer.deserialize(delivery);
+		if (!equalsGeneric(obj, obj2)) {
+			console.error("Failed to re-read");
+		}
 	}
-	
 	return delivery;
 }
 
