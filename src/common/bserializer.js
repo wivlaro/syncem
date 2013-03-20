@@ -869,7 +869,7 @@ function makeFieldExpansions(bodies, src, dst, field) {
 		else {
 			bodies.writeFields.push("bserializer.writeGeneric(p, " + src + ", objectdb);");
 			bodies.readFields.push(dst + " = bserializer.readGeneric(p, " + dst + ", objectdb);");
-			bodies.copyFields.push(dst + " = bserializer.copyGeneric(" + src + ", " + dst + ", objectdb);");
+			bodies.copyFields.push(dst + " = bserializer.copyGeneric(" + dst + ", " + src + ", objectdb);");
 		}
 	}
 }
@@ -912,32 +912,32 @@ ArrayConfig.prototype.write = function(p, src, objectdb) {
 };
 
 
-ArrayConfig.prototype.makeFieldExpansions = function (bodies, src, dst, field) {
+ArrayConfig.prototype.makeFieldExpansions = function (bodies, src_expr, dst, field) {
 	
 	var i = gensym('i');
 	var l = gensym('l');
-	var temp_src = gensym(src);
-	var el_write_src = gensym(src);
-	var el_read_dst = gensym(dst);
+	var src_temp = gensym(src_expr);
+	var src_el = gensym(src_expr);
+	var dst_el = gensym(dst);
 	var element_bodies = {
 		writeFields:[],
 		readFields:[],
 		copyFields:[]
 	};
 	
-	makeFieldExpansions(element_bodies, el_write_src, el_read_dst, field.element);
+	makeFieldExpansions(element_bodies, src_el, dst_el, field.element);
 	
 	if (this.rle) {
 		autil.array_append(bodies.writeFields, autil.expand_template(
-			"var @src = @src_expr, @l = @src.length, @el_src;",
+			"var @src_temp = @src_expr, @l = @src_temp.length, @src_el;",
 			"p.writeSmartUint(@l);",
 			"var @i = 0, @block_start = 0;",
 			"if (@l > 0) while (true) {",
 			"	if (@i === @block_start) {",
-			"		@el_src = @src[@i];",
+			"		@src_el = @src_temp[@i];",
 			"	}",
 			"	@i++;",
-			"	if (@i === @l || @src[@i] !== @el_src) {",
+			"	if (@i === @l || @src_temp[@i] !== @src_el) {",
 //			"		console.log('Write @src from ' + @block_start + '-' + @i + '/' + @l + ':' + @el_src);",
 			"		p.writeSmartUint(@i - @block_start - 1);", //-1 because we can't write 0 elements
 			autil.indent("		", element_bodies.writeFields),
@@ -946,9 +946,9 @@ ArrayConfig.prototype.makeFieldExpansions = function (bodies, src, dst, field) {
 			"	}",
 			"}",
 			{
-				el_src:el_write_src,
-				src:temp_src,
-				src_expr:src,
+				src_el:src_el,
+				src_temp:src_temp,
+				src_expr:src_expr,
 				i:i,
 				l:l,
 				block_start:gensym('block_start')
@@ -963,18 +963,18 @@ ArrayConfig.prototype.makeFieldExpansions = function (bodies, src, dst, field) {
 			"if (@dst.length !== @l) {",
 			"	@dst.length = @l;",
 			"}",
-			"for (var @i = 0, @next_read = 0, @el_dst; @i < @l; @i++) {",
+			"for (var @i = 0, @next_read = 0, @dst_el; @i < @l; @i++) {",
 			"	if (@i === @next_read) {",
 			"		@next_read += 1 + p.readSmartUint();",
-			"		@el_dst = @dst[@i];",
+			"		@dst_el = @dst[@i];",
 			autil.indent("		",element_bodies.readFields),
-//			"		console.log('Read @dst until ' + @next_read + '/' + @l + ':' + @el_dst);",
+//			"		console.log('Read @dst until ' + @next_read + '/' + @l + ':' + @dst_el);",
 			"	}",
-			"	@dst[@i] = @el_dst;",
+			"	@dst[@i] = @dst_el;",
 			"}",
 			{
 				next_read:gensym('next_read'),
-				el_dst:el_read_dst,
+				dst_el:dst_el,
 				dst:dst,
 				i:i,
 				l:l
@@ -983,17 +983,17 @@ ArrayConfig.prototype.makeFieldExpansions = function (bodies, src, dst, field) {
 	}
 	else {
 		autil.array_append(bodies.writeFields, autil.expand_template(
-			"var @src = @src_expr, @l = @src.length;",
+			"var @src_temp = @src_expr, @l = @src_temp.length;",
 			"p.writeSmartUint(@l);",
-			"for (var @i = 0, @el_src; @i < @l; @i++) {",
-			'	@el_src = @src[@i];',
-//			'	console.log("Writing " + @i + "/" + @l + ": " + @el_src);',
+			"for (var @i = 0, @src_el; @i < @l; @i++) {",
+			'	@src_el = @src_temp[@i];',
+//			'	console.log("Writing " + @i + "/" + @l + ": " + @src_el);',
 			autil.indent('	',element_bodies.writeFields),
 			"}",
 			{
-				el_src:el_write_src,
-				src:src,
-				src_expr:src,
+				src_el:src_el,
+				src_temp:src_temp,
+				src_expr:src_expr,
 				i:i,
 				l:l
 			}
@@ -1005,13 +1005,13 @@ ArrayConfig.prototype.makeFieldExpansions = function (bodies, src, dst, field) {
 			"	@dst = [];",
 			"	@dst.length = @l;",
 			"}",
-			"for (var @i = 0, @el_dst; @i < @l; @i++) {",
-			"	@el_dst = @dst[@i];",
+			"for (var @i = 0, @dst_el; @i < @l; @i++) {",
+			"	@dst_el = @dst[@i];",
 			autil.indent('	',element_bodies.readFields),
-			"	@dst[@i] = @el_dst;",
+			"	@dst[@i] = @dst_el;",
 			"}",
 			{
-				el_dst:el_read_dst,
+				dst_el:dst_el,
 				dst:dst,
 				i:i,
 				l:l
@@ -1021,24 +1021,30 @@ ArrayConfig.prototype.makeFieldExpansions = function (bodies, src, dst, field) {
 	
 	
 	autil.array_append(bodies.copyFields, autil.expand_template(
-		"var @src = @src_expr;",
-		"var @l = @src.length;",
-		"if (@dst == null) {",
-		"	@dst = [];",
+		"var @src_temp = @src_expr;",
+//		"var @dst_temp = @dst;",
+		"var @l = @src_temp.length;",
+		"if (@dst_temp == null) {",
+		"	@dst_temp = [];",
 		"}",
-		"if (@dst.length !== @l) {",
-		"	@dst.length = @l;",
+		"if (@dst_temp.length !== @l) {",
+		"	@dst_temp.length = @l;",
 		"}",
-		"for (var @i = 0; @i < @l; @i++) {",
-		autil.indent("	",element_bodies.readFields),
+		"for (var @i = 0, @dst_el, @src_el; @i < @l; @i++) {",
+		"	@dst_el = @dst_temp[@i];",
+		"	@src_el = @src_temp[@i];",
+		autil.indent("	",element_bodies.copyFields),
 //			"		console.log('Read @dst until ' + @next_read + '/' + @l + ':' + @el_dst);",
+		"	@dst_temp[@i] = @dst_el;",
 		"}",
+//		"@dst = @dst_temp;",
 		{
-			el_src:el_write_src,
-			el_dst:el_read_dst,
+			src_el:src_el,
+			dst_el:dst_el,
 			dst:dst,
-			src_expr:src,
-			src:temp_src,
+			dst_temp:dst,
+			src_expr:src_expr,
+			src_temp:src_temp,
 			next_read:gensym('next_read'),
 			i:i,
 			l:l
@@ -1287,7 +1293,7 @@ function copyGeneric(dst, src, objectdb) {
 		objectdb = [];
 	}
 	var config = detectConfig(src);
-//	if (debug) console.log("config=",config);
+//	if (true) console.log("copyGeneric config=",config, src);
 	if (config) {
 		dst = config.copy(dst, src, objectdb);
 	}
