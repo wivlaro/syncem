@@ -202,7 +202,7 @@ if (have_BufferPacket) {
 		this.offset = 0;
 	}
 	
-	BufferPacket.prototype = new Packet(new Buffer(1));
+	BufferPacket.prototype = new Packet(new ArrayBuffer(1));
 	BufferPacket.prototype.constructor = BufferPacket;
 	
 	BufferPacket.prototype.readInt8   = function() { var value = this.impl.readInt8     (this.offset); this.offset++;    PACKET_DEBUG && console.log("Read ",value); return value; };

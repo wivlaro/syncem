@@ -122,6 +122,11 @@ function ObjectChatMove(objectId, message, ttl) {
 	this.ttl = ttl || 50;
 	
 }
+ObjectChatMove.prototype = new SyncObjectMove();
+ObjectChatMove.prototype.constructor = ObjectChatMove;
+syncem.ObjectChatMove = ObjectChatMove;
+bserializer.registerClass(ObjectChatMove);
+
 ObjectChatMove.prototype.apply = function(state) {
 	state.messages.push({
 		id: this.id,
@@ -133,9 +138,6 @@ ObjectChatMove.prototype.apply = function(state) {
 		state.messages.shift();
 	}
 };
-
-syncem.ObjectChatMove = ObjectChatMove;
-bserializer.registerClass(ObjectChatMove);
 
 
 function SyncRoot() {
@@ -472,18 +474,33 @@ function simpleChecksum(d) {
 }
 syncem.simpleChecksum= simpleChecksum;
 
+function SyncPacket() {
+	this.clientTime = null;
+	this.serverTime = null;
+}
+syncem.SyncPacket = SyncPacket;
+bserializer.registerClass(SyncPacket, {
+	fields: [
+		{name: 'clientTime', type: 'float64'},
+		{name: 'serverTime', type: ['null','float64']}
+	]
+});
+
 function ChecksumPacket(tick, checkstring) {
 	this.tick = tick;
 	this.checksum = checkstring ? simpleChecksum(checkstring) : 0;
 }
 syncem.ChecksumPacket = ChecksumPacket;
-bserializer.registerClass(ChecksumPacket);
+bserializer.registerClass(ChecksumPacket, [
+	{name:'tick',type:'uint32'},
+	{name:'checksum',type:'int32'}
+]);
 
 function StartRequestPacket(name) {
 	this.name = name;
 }
 syncem.StartRequestPacket = StartRequestPacket;
-bserializer.registerClass(StartRequestPacket);
+bserializer.registerClass(StartRequestPacket, [{name:'name',type:'string'}]);
 
 })(typeof exports === 'undefined'? this['syncem']={}: exports);
 
