@@ -1382,7 +1382,6 @@ function serialize(obj, test) {
 		a.sort(function (a,b){
 			return b[0] - a[0];
 		});
-		console.log("serialize bytes=" + packet.offset, a);
 	}
 	var delivery = packet.getDelivery();
 	if (test) {
@@ -1390,6 +1389,10 @@ function serialize(obj, test) {
 		if (!equalsGeneric(obj, obj2)) {
 			console.error("Failed to re-read");
 		}
+		console.log("serialize bytes=" + packet.offset, a);
+	}
+	else {
+	//	console.log("serialize bytes=" + packet.offset, a);
 	}
 	return delivery;
 }
