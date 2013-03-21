@@ -659,8 +659,11 @@ ObjectConfig.prototype.copy = function (dst, src, objectdb) {
 				dst = ctor_output;
 			}
 		}
-		else {
+		else if (this.ctor) {
 			dst = new this.ctor();
+		}
+		else {
+			dst = {};
 		}
 	}
 	if (this.circular) {

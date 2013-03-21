@@ -83,6 +83,13 @@ syncem.ObjectAddedMove = ObjectAddedMove;
 bserializer.registerClass(ObjectAddedMove);
 ObjectAddedMove.prototype.apply = function(state) {
 	state.objects[this.object.id] = this.object;
+	state.messages.push({
+		id: this.id,
+		objectId: this.objectId,
+		message: "has joined",
+		expiresAt: state.tick + 50,
+		system:true
+	});
 };
 
 
@@ -95,7 +102,14 @@ syncem.ObjectRemovedMove = ObjectRemovedMove;
 bserializer.registerClass(ObjectRemovedMove);
 
 ObjectRemovedMove.prototype.apply = function(state) {
-	console.log("Applying ObjectRemovedMove for ", this.objectId, " in tick ", state.tick);
+//	console.log("Applying ObjectRemovedMove for ", this.objectId, " in tick ", state.tick);
+	state.messages.push({
+		id: this.id,
+		objectId: (this.objectId && this.objectId in state.objects && state.objects[this.objectId].name) || this.objectId,
+		message: "has left",
+		expiresAt: state.tick + 50,
+		system:true
+	});
 	state.objects[this.objectId].onDelete(state);
 	delete state.objects[this.objectId];
 };
@@ -109,19 +123,15 @@ function ObjectChatMove(objectId, message, ttl) {
 	
 }
 ObjectChatMove.prototype.apply = function(state) {
-	state.messages.push(this.getMessageData(state));
-	if (state.messages.length > 50) {
-		state.messages.shift();
-	}
-};
-
-ObjectChatMove.prototype.getMessageData = function(state) {
-	return {
+	state.messages.push({
 		id: this.id,
 		objectId: this.objectId,
 		message: this.message,
 		expiresAt: state.tick + 50
-	};
+	});
+	if (state.messages.length > 50) {
+		state.messages.shift();
+	}
 };
 
 syncem.ObjectChatMove = ObjectChatMove;
@@ -253,7 +263,7 @@ Syncer.prototype.addMove = function(move, allowFuture) {
 			if (!(move.tick in this.queuedMoves)) {
 				this.queuedMoves[move.tick] = {};
 			}
-			console.log("Enqueued move @" + move.tick + ": " + move.id + " " + move.constructor.name);
+//			console.log("Enqueued move @" + move.tick + ": " + move.id + " " + move.constructor.name);
 			this.queuedMoves[move.tick][move.id] = move;
 		}
 		else {
@@ -321,7 +331,7 @@ Syncer.prototype.update = function() {
 		if (this.dirty_tick in this.queuedMoves) {
 			var moves = this.queuedMoves[this.dirty_tick];
 			for (var moveId in moves) {
-				console.log("Adding queued move ", moveId, ":", moves[moveId]);
+//				console.log("Adding queued move ", moveId, ":", moves[moveId]);
 				next_state.moves[moveId] = moves[moveId];
 			}
 			delete this.queuedMoves[this.dirty_tick];
@@ -470,7 +480,7 @@ syncem.ChecksumPacket = ChecksumPacket;
 bserializer.registerClass(ChecksumPacket);
 
 function StartRequestPacket(name) {
-	this.tick = name;
+	this.name = name;
 }
 syncem.StartRequestPacket = StartRequestPacket;
 bserializer.registerClass(StartRequestPacket);
