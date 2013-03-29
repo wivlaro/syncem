@@ -318,10 +318,7 @@ Syncer.prototype.update = function() {
 
 		//Fresh state?
 		if (next_state == null) {
-			next_state = this.states[next_index] = bserializer.copyGeneric(null, prev_state);
-			if (!bserializer.equalsGeneric(prev_state, next_state)) {
-				console.error("Equals fail!");
-			}
+			next_state = this.states[next_index] = bserializer.copyGeneric(null, prev_state, undefined, true);
 		}
 		//Recycled old state?
 		else if (next_state.tick != this.dirty_tick) {
@@ -342,6 +339,7 @@ Syncer.prototype.update = function() {
 //		console.log("copying ", prev_tick, " into ", this.dirty_tick);
 		//Only copy the objects, not the moves
 		next_state = bserializer.copyGeneric(next_state, prev_state);
+//		next_state = bserializer.copyGeneric(next_state, prev_state, undefined, true);
 //		console.log("copied ", prev_tick, " into ", this.dirty_tick);
 		next_state.tick = this.dirty_tick;
 		next_state.update();
