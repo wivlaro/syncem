@@ -210,14 +210,14 @@ if (have_BufferPacket) {
 	BufferPacket.prototype = new Packet(new ArrayBuffer(1));
 	BufferPacket.prototype.constructor = BufferPacket;
 	
-	BufferPacket.prototype.readInt8   = function() { var value = this.impl.readInt8     (this.offset); this.offset++;    PACKET_DEBUG && console.log("Read ",value); return value; };
-	BufferPacket.prototype.readUint8  = function() { var value = this.impl.readUInt8    (this.offset); this.offset++;    PACKET_DEBUG && console.log("Read ",value); return value; };
-	BufferPacket.prototype.readInt16  = function() { var value = this.impl.readInt16BE  (this.offset); this.offset += 2; PACKET_DEBUG && console.log("Read ",value); return value; };
-	BufferPacket.prototype.readUint16 = function() { var value = this.impl.readUInt16BE (this.offset); this.offset += 2; PACKET_DEBUG && console.log("Read ",value); return value; };
-	BufferPacket.prototype.readInt32  = function() { var value = this.impl.readInt32BE  (this.offset); this.offset += 4; PACKET_DEBUG && console.log("Read ",value); return value; };
-	BufferPacket.prototype.readUint32 = function() { var value = this.impl.readUInt32BE (this.offset); this.offset += 4; PACKET_DEBUG && console.log("Read ",value); return value; };
-	BufferPacket.prototype.readFloat32= function() { var value = this.impl.readFloatBE  (this.offset); this.offset += 4; PACKET_DEBUG && console.log("Read ",value); return value; };
-	BufferPacket.prototype.readFloat64= function() { var value = this.impl.readDoubleBE (this.offset); this.offset += 8; PACKET_DEBUG && console.log("Read ",value); return value; };
+	BufferPacket.prototype.readInt8   = function() { var value = this.impl.readInt8     (this.offset); this.offset++;    return value; };
+	BufferPacket.prototype.readUint8  = function() { var value = this.impl.readUInt8    (this.offset); this.offset++;    return value; };
+	BufferPacket.prototype.readInt16  = function() { var value = this.impl.readInt16BE  (this.offset); this.offset += 2; return value; };
+	BufferPacket.prototype.readUint16 = function() { var value = this.impl.readUInt16BE (this.offset); this.offset += 2; return value; };
+	BufferPacket.prototype.readInt32  = function() { var value = this.impl.readInt32BE  (this.offset); this.offset += 4; return value; };
+	BufferPacket.prototype.readUint32 = function() { var value = this.impl.readUInt32BE (this.offset); this.offset += 4; return value; };
+	BufferPacket.prototype.readFloat32= function() { var value = this.impl.readFloatBE  (this.offset); this.offset += 4; return value; };
+	BufferPacket.prototype.readFloat64= function() { var value = this.impl.readDoubleBE (this.offset); this.offset += 8; return value; };
 	
 	BufferPacket.prototype.writeInt8   = function(value) { if (PACKET_PROFILE) { var s = new Error().stack.split("\n"); for (var i=1;i<s.length && i<10;i++) pp[s[i]] = (pp[s[i]]||0) + 1; } this.impl.writeInt8     (value, this.offset++); };
 	BufferPacket.prototype.writeUint8  = function(value) { if (PACKET_PROFILE) { var s = new Error().stack.split("\n"); for (var i=1;i<s.length && i<10;i++) pp[s[i]] = (pp[s[i]]||0) + 1; } this.impl.writeUInt8    (value, this.offset++); };
@@ -599,6 +599,10 @@ ObjectConfig.prototype.makeExpansions = function() {
 			read_dst = gensym(field.name);
 			bodies.read.push('var ' + read_dst + ';');
 			bodies.copy.push('var ' + read_dst + ';');
+			var field_config = field.type && getTypeConfig(field.type);
+			if (!(field_config instanceof PrimitiveConfig) && !(field_config instanceof LiteralConfig)) {
+				bodies.copy.push('if (dst != null) ' + read_dst + '=dst.' + field.name + ';');
+			}
 		}
 		else {
 			read_dst = 'dst.' + field.name;
@@ -651,6 +655,7 @@ ObjectConfig.prototype.makeExpansions = function() {
 		"}");
 	bodies.copy.push(
 		"if (dst == null || dst.constructor !== this.ctor) {",
+//		"	global.bserializer_debug && console.trace('Copy making new ' + (this.ctor.name || this.index) + ' was ' + dst);",
 		"	dst = new this.ctor(" + ctor_syms.join(',') + ");",
 		"}");
 	if (this.ctor_args) {
@@ -722,6 +727,13 @@ ObjectConfig.prototype.makeExpansions = function() {
 	}
 	return expansions;
 };
+
+//if (typeof process === 'object' && process.on) {
+//	process.on('SIGUSR1', function() {
+//		console.log("Received siginfo");
+//		global.bserializer_debug = true;
+//	});
+//}
 
 ObjectConfig.prototype.makeFieldExpansions = function (bodies, write_src, read_dst) {
 	bodies.write.push("bserializer.registrationsByIndex["+this.index+"].write(p, " + write_src + ", objectdb);");
