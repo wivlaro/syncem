@@ -665,6 +665,9 @@ ObjectConfig.prototype.makeExpansions = function() {
 			var ctor_arg_name = this.ctor_args[ci];
 			var ctor_sym = ctor_syms[ci];
 			var field_config = get_field_config(ctor_arg_name);
+			if (field_config === null) {
+				throw "Couldn't find field config for ctor_args[" + ci + "]: " + ctor_arg_name;
+			}
 			if (field_config.serialize !== false) {
 				bodies.read.push('dst.'+ctor_arg_name+'='+ctor_sym+';');
 			}

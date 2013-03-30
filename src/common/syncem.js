@@ -110,8 +110,7 @@ ObjectRemovedMove.prototype.apply = function(state) {
 		expiresAt: state.tick + 50,
 		system:true
 	});
-	state.objects[this.objectId].onDelete(state);
-	delete state.objects[this.objectId];
+	state.removeObject(this.objectId);
 };
 
 
@@ -146,6 +145,7 @@ function SyncRoot() {
 	//Moves are not copied between states and not synchronized in the same way
 	this.moves = {};
 	
+	this.uidCounter = 0;
 	this.tick = 0;
 	this.objects = {};
 	this.messages = [];
@@ -153,7 +153,23 @@ function SyncRoot() {
 SyncRoot.prototype = new SyncOb();
 SyncRoot.prototype.constructor = SyncRoot;
 syncem.SyncRoot = SyncRoot;
-bserializer.registerClass(SyncRoot, {'not':['moves']});
+syncem.syncRootFields = [
+	{name:'uidCounter', type:'float64'},
+	{name:'tick', type:'float64'},
+	{name:'objects', type:'object'},
+	{name:'messages', type:'array'}
+];
+
+SyncRoot.prototype.makeUidString = function() {
+	return (this.uidCounter++).toString(36);
+};
+
+SyncRoot.prototype.removeObject = function(objectId) {
+	if (objectId in this.objects) {
+		this.objects[objectId].onDelete(this);
+		delete this.objects[objectId];
+	}
+};
 	
 SyncRoot.prototype.applyMoves = function() {
 	var moveIds = [];

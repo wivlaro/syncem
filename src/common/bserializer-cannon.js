@@ -36,8 +36,7 @@ bserializer.registerClass(CANNON.RigidBody, {
 		{name:'shape', static:true},
 		{name: 'aabbmin', type:CANNON.Vec3},
 		{name: 'aabbmax', type:CANNON.Vec3},
-		'adust_player',
-		'adust_building'])
+		'adust_object'])
 });
 CANNON.RigidBody.prototype.writeStaticBodyStateFields = function(p, objectdb) {
 	p.writeSmartUint(this.index);
