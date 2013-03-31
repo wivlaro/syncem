@@ -50,8 +50,26 @@ CANNON.RigidBody.prototype.readStaticBodyStateFields = function(p, objectdb) {
 	this.timeLastSleepy = p.readFloat64();
 };
 
-bserializer.registerClass(CANNON.Material);
-bserializer.registerClass(CANNON.ContactMaterial);
+bserializer.registerClass(CANNON.Material,{
+	circular:true,
+	fields: [
+		{name:'id', type:'float64'},
+		{name:'name', type:'string'}
+	]
+});
+bserializer.registerClass(CANNON.ContactMaterial, {
+	circular:true,
+	fields: [
+		{name:'id',type:'float64'},
+		{name:'materials',type:'array',element:{type:CANNON.Material}},
+		{name:'friction',type:'float64'},
+		{name:'restitution',type:'float64'},
+		{name:'contactEquationStiffness',type:'float64'},
+		{name:'contactEquationRegularizationTime',type:'float64'},
+		{name:'frictionEquationStiffness',type:'float64'},
+		{name:'frictionEquationRegularizationTime',type:'float64'}
+	]
+});
 
 var shape_fields = [
 //	{name:'type', type:'int8'},
