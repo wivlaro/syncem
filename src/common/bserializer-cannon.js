@@ -11,11 +11,14 @@ var particle_fields = [
 	{name: 'force', type: CANNON.Vec3},
 	{name: 'linearDamping', type: 'float64'},
 	{name: 'motionstate', type: 'int8'},
+	{name: 'collisionResponse', type: ['true','false']},
 	{name: 'allowSleep', type: ['true','false']},
 	{name: 'sleepState', type: 'int8'},
 	{name: 'sleepSpeedLimit', type: 'float64'},
 	{name: 'sleepTimeLimit', type: 'float64'},
-	{name: 'timeLastSleepy', type: 'float64'}];
+	{name: 'timeLastSleepy', type: 'float64'},
+	{name: 'collisionFilterGroup', type:'int32'},
+	{name: 'collisionFilterMask', type:'int32'}];
 bserializer.registerClass(CANNON.Particle, {
 	circular: true,
 	fields: particle_fields.slice()
