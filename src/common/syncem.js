@@ -514,7 +514,9 @@ function StartRequestPacket(name) {
 	this.name = name;
 }
 syncem.StartRequestPacket = StartRequestPacket;
-bserializer.registerClass(StartRequestPacket, [{name:'name',type:'string'}]);
+bserializer.registerClass(StartRequestPacket, [
+	{name:'name',type:'string'}
+]);
 
 })(typeof exports === 'undefined'? this['syncem']={}: exports);
 
