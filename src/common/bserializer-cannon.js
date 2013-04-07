@@ -52,6 +52,11 @@ CANNON.RigidBody.prototype.readStaticBodyStateFields = function(p, objectdb) {
 	this.sleepState = p.readUint8();
 	this.timeLastSleepy = p.readFloat64();
 };
+CANNON.RigidBody.prototype.copyStaticBodyStateFieldsFrom = function(src, objectdb) {
+	this.index = src.index;
+	this.sleepState = src.sleepState;
+	this.timeLastSleepy = src.timeLastSleepy;
+};
 
 bserializer.registerClass(CANNON.Material,{
 	circular:true,
