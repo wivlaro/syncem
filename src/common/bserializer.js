@@ -13,7 +13,6 @@ Packet.prototype.getDelivery = function() {
 	return this.impl.buffer.slice(0, this.offset);
 };
 
-var PACKET_DEBUG = false;
 var PACKET_PROFILE = false;
 var GEN_VERBOSITY = {
 	class:false,
