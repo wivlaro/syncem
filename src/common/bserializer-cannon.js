@@ -58,6 +58,18 @@ CANNON.RigidBody.prototype.copyStaticBodyStateFieldsFrom = function(src, objectd
 	this.timeLastSleepy = src.timeLastSleepy;
 };
 
+CANNON.StaticRigidBody = function() {
+	CANNON.RigidBody.apply(this, arguments);
+};
+CANNON.StaticRigidBody.prototype = new CANNON.RigidBody(-1, new CANNON.Sphere(1));
+CANNON.StaticRigidBody.prototype.constructor = CANNON.StaticRigidBody;
+bserializer.registerClass(CANNON.StaticRigidBody, {
+	circular: true,
+	fields:[
+		{name: 'index', type: ['undefined','int32']},
+		'adust_object']
+});
+
 bserializer.registerClass(CANNON.Material,{
 	circular:true,
 	fields: [
@@ -141,8 +153,9 @@ bserializer.registerClass(CANNON.World, {
 		{name: 'defaultContactMaterial', serialize:false},
 		{name: 'collisionMatrix', type: 'array-rle'},
 		{name: 'collisionMatrixPrevious', type: 'array-rle'},
-		{name: 'gravity', type: CANNON.Vec3, serialize:false},
-		{name: 'bodies', type: 'array', element:{type:[CANNON.Particle, CANNON.RigidBody]}, serialize:false}
+		{name: 'gravity', type: CANNON.Vec3, serialize:false}
+//		,
+//		{name: 'bodies', type: 'array', element:{type:[CANNON.Particle, CANNON.RigidBody]}, serialize:false}
 	]
 });
 bserializer.registerClass(CANNON.Solver);
