@@ -151,9 +151,10 @@ bserializer.registerClass(CANNON.World, {
 		{name: 'nextId', type: 'int32'},
 		{name: 'allowSleep', type: 'boolean', serialize:false},
 		{name: 'defaultContactMaterial', serialize:false},
-		{name: 'collisionMatrix', type: 'array-rle'},
-		{name: 'collisionMatrixPrevious', type: 'array-rle'},
-		{name: 'gravity', type: CANNON.Vec3, serialize:false}
+		{name: 'collisionMatrix', type: [CANNON.ObjectCollisionMatrix, CANNON.ArrayCollisionMatrix]},
+		{name: 'collisionMatrixPrevious', type: [CANNON.ObjectCollisionMatrix, CANNON.ArrayCollisionMatrix]},
+		{name: 'gravity', type: CANNON.Vec3, serialize:false},
+		{name: 'broadphase', serialize:false, directCopy:true}
 //		,
 //		{name: 'bodies', type: 'array', element:{type:[CANNON.Particle, CANNON.RigidBody]}, serialize:false}
 	]
@@ -162,3 +163,11 @@ bserializer.registerClass(CANNON.Solver);
 bserializer.registerClass(CANNON.Broadphase);
 bserializer.registerClass(CANNON.NaiveBroadphase);
 bserializer.registerClass(CANNON.GridBroadphase);
+
+bserializer.registerClass(CANNON.ObjectCollisionMatrix, [
+	{name:'matrix', type:'object'}
+]);
+
+bserializer.registerClass(CANNON.ArrayCollisionMatrix, [
+	{name:'matrix', type:'rle-array'}
+]);

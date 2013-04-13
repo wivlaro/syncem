@@ -607,13 +607,24 @@ ObjectConfig.prototype.makeExpansions = function() {
 			read_dst = 'dst.' + field.name;
 		}
 
-		if (field.serialize === false) {
+		if (field.serialize === false || field.directCopy === true) {
+			//Override bodies object, with read/write that will get discarded
 			var bodiesSaved = bodies;
 			bodies = {};
 			for (var method in bodiesSaved) {
 				var lines = bodiesSaved[method];
-				if (method === 'read' || method === 'write') {
-					lines = [];
+				switch (method) {
+					case 'read':
+					case 'write':
+						if (field.serialize === false) {
+							lines = [];
+						}
+					case 'copy':
+						if (field.directCopy === true) {
+							lines.push(read_dst + '=src.' + field.name + ';');
+							lines = [];
+						}
+						break;
 				}
 				bodies[method] = lines;
 			}
@@ -622,7 +633,7 @@ ObjectConfig.prototype.makeExpansions = function() {
 			bodies.write.push("console.log('	Writing " + field.name + " @'+p.offset);");
 			bodies.read.push("console.log('	Reading " + field.name + " @'+p.offset);");
 		}
-
+		
 		makeFieldExpansions(bodies, 'src.' + field.name, read_dst, field);
 		return read_dst;
 	}
