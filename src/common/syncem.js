@@ -334,7 +334,7 @@ Syncer.prototype.update = function() {
 
 		//Fresh state?
 		if (next_state == null) {
-			next_state = this.states[next_index] = bserializer.copyGeneric(null, prev_state, undefined, true);
+			next_state = this.states[next_index] = bserializer.copyGeneric(null, prev_state, undefined, {test:true});
 		}
 		//Recycled old state?
 		else if (next_state.tick != this.dirty_tick) {

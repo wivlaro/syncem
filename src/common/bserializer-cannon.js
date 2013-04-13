@@ -1,6 +1,7 @@
 
 var particle_fields = [
-	{name: 'index', type: ['undefined','int32']},
+	{name: 'id', type: ['undefined','uint32']},
+	{name: 'index', type: ['undefined','uint32']},
 	{name: 'type', type: 'string'},
 	{name: 'mass', type: 'float64'},
 	{name: 'invMass', type: 'float64'},
@@ -42,22 +43,6 @@ bserializer.registerClass(CANNON.RigidBody, {
 		{name: 'aabbmax', type:CANNON.Vec3},
 		'adust_object'])
 });
-CANNON.RigidBody.prototype.writeStaticBodyStateFields = function(p, objectdb) {
-	p.writeSmartUint(this.index);
-	p.writeUint8(this.sleepState);
-	p.writeFloat64(this.timeLastSleepy);
-};
-
-CANNON.RigidBody.prototype.readStaticBodyStateFields = function(p, objectdb) {
-	this.index = p.readSmartUint();
-	this.sleepState = p.readUint8();
-	this.timeLastSleepy = p.readFloat64();
-};
-CANNON.RigidBody.prototype.copyStaticBodyStateFieldsFrom = function(src, objectdb) {
-	this.index = src.index;
-	this.sleepState = src.sleepState;
-	this.timeLastSleepy = src.timeLastSleepy;
-};
 
 CANNON.StaticRigidBody = function() {
 	CANNON.RigidBody.apply(this, arguments);
@@ -67,7 +52,8 @@ CANNON.StaticRigidBody.prototype.constructor = CANNON.StaticRigidBody;
 bserializer.registerClass(CANNON.StaticRigidBody, {
 	circular: true,
 	fields:[
-		{name: 'index', type: ['undefined','int32']},
+		{name: 'id', type: ['undefined','uint32']},
+		{name: 'index', type: ['undefined','uint32']},
 		'adust_object']
 });
 

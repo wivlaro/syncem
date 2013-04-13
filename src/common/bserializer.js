@@ -314,9 +314,9 @@ BaseConfig.prototype.equals = function (self, other) {
 };
 
 BaseConfig.prototype.makeFieldExpansions = function (bodies, write_src, read_dst) {
-	bodies.write.push("bserializer.writeGeneric(p, " + write_src + ", objectdb);");
+	bodies.write.push("bserializer.writeGeneric(p, " + write_src + ", objectdb, writeOptions);");
 	bodies.read.push(read_dst + " = bserializer.readGeneric(p, " + read_dst + ", objectdb);");
-	bodies.copy.push(read_dst + " = bserializer.copyGeneric(" + read_dst + ", " + write_src + ", objectdb);");
+	bodies.copy.push(read_dst + " = bserializer.copyGeneric(" + read_dst + ", " + write_src + ", objectdb, copyOptions);");
 };
 
 function LiteralConfig(name, value) {
@@ -476,24 +476,44 @@ ObjectConfig.prototype.equals = function (self, other, objectdb) {
 	return equals;
 };
 
-ObjectConfig.prototype.write = function(p, src, objectdb) {
+ObjectConfig.prototype.write = function(p, src, objectdb, writeOptions) {
 	var n = 0;
-	for (var f in src) {
-		if (f !== '$bserializer_writeIndex'
-				&& typeof src[f] !== 'function'
-				&& !(this.not && (f in this.not))
-				&& !(this.ctor_args && this.ctor_args.indexOf(f) !== -1)) {
-			n++;
+	if (writeOptions && writeOptions.objectFieldSort) {
+		var fields = [];
+		for (var f in src) {
+			if (f !== '$bserializer_writeIndex'
+					&& typeof src[f] !== 'function'
+					&& !(this.not && (f in this.not))
+					&& !(this.ctor_args && this.ctor_args.indexOf(f) !== -1)) {
+				fields.push(f);
+			}
+		}
+		fields.sort();
+		p.writeSmartUint(fields.length);
+		for (var i = 0,l=fields.length; i < l; i++) {
+			var f = fields[i];
+			p.writeString(f);
+			writeGeneric(p, src[f], objectdb, writeOptions);
 		}
 	}
-	p.writeSmartUint(n);
-	for (var f in src) {
-		if (f !== '$bserializer_writeIndex'
-				&& typeof src[f] !== 'function'
-				&& !(this.not && (f in this.not))
-				&& !(this.ctor_args && this.ctor_args.indexOf(f) !== -1)) {
-			p.writeString(f);
-			writeGeneric(p, src[f], objectdb);
+	else {
+		for (var f in src) {
+			if (f !== '$bserializer_writeIndex'
+					&& typeof src[f] !== 'function'
+					&& !(this.not && (f in this.not))
+					&& !(this.ctor_args && this.ctor_args.indexOf(f) !== -1)) {
+				n++;
+			}
+		}
+		p.writeSmartUint(n);
+		for (var f in src) {
+			if (f !== '$bserializer_writeIndex'
+					&& typeof src[f] !== 'function'
+					&& !(this.not && (f in this.not))
+					&& !(this.ctor_args && this.ctor_args.indexOf(f) !== -1)) {
+				p.writeString(f);
+				writeGeneric(p, src[f], objectdb, writeOptions);
+			}
 		}
 	}
 };
@@ -534,14 +554,14 @@ ObjectConfig.prototype.setCopyCircular = function(dst, src, objectdb) {
 	objectdb.push(src);
 };
 
-ObjectConfig.prototype.copy = function (dst, src, objectdb) {
+ObjectConfig.prototype.copy = function (dst, src, objectdb, copyOptions) {
 	if (dst == null) {
 		dst = {};
 	}
 	var fieldName;
 	for (fieldName in src) {
 		if (fieldName !== '$bserializer_copydst' && typeof src[fieldName] !== 'function' && (typeof this.not === 'undefined' || !(fieldName in this.not))) {
-			dst[fieldName] = copyGeneric(dst[fieldName], src[fieldName], objectdb);
+			dst[fieldName] = copyGeneric(dst[fieldName], src[fieldName], objectdb, copyOptions);
 		}
 	}
 	for (fieldName in dst) {
@@ -696,10 +716,10 @@ ObjectConfig.prototype.makeExpansions = function() {
 	}
 	
 	if (typeof this.onPreCopyFields !== 'undefined') {
-		bodies.copy.push('this.onPreCopyFields(dst, src, objectdb);');
+		bodies.copy.push('this.onPreCopyFields(dst, src, objectdb, copyOptions);');
 	}
 	if (typeof this.onPreWriteFields !== 'undefined') {
-		bodies.write.push("this.onPreWriteFields(p, src, objectdb);");
+		bodies.write.push("this.onPreWriteFields(p, src, objectdb, writeOptions);");
 	}
 	if (typeof this.onPreReadFields !== 'undefined') {
 		bodies.read.push("this.onPreReadFields(p, dst, objectdb);");
@@ -712,10 +732,10 @@ ObjectConfig.prototype.makeExpansions = function() {
 	}
 	
 	if (typeof this.onPostCopyFields !== 'undefined') {
-		bodies.copy.push('this.onPostCopyFields(dst, src, objectdb);');
+		bodies.copy.push('this.onPostCopyFields(dst, src, objectdb, copyOptions);');
 	}
 	if (typeof this.onPostWriteFields !== 'undefined') {
-		bodies.write.push("this.onPostWriteFields(p, src, objectdb);");
+		bodies.write.push("this.onPostWriteFields(p, src, objectdb, writeOptions);");
 	}
 	if (typeof this.onPostReadFields !== 'undefined') {
 		bodies.read.push("this.onPostReadFields(p, dst, objectdb);");
@@ -729,14 +749,10 @@ ObjectConfig.prototype.makeExpansions = function() {
 	var expansions ={
 		copy: "function copy" + function_suffix + "(dst,src,objectdb) {\n\t\t" + bodies.copy.join("\n\t\t") + "}"
 	};
-//	if (this.ctor_args) {
-//		expansions.writeCtorArgs = "function writeCtorArgs" + function_suffix + "(p,src,objectdb) {\n\t\t" + bodies.writeCtorArgs.join("\n\t\t") + "}";
-//		expansions.copyCtorArgs = "function copyCtorArgs" + function_suffix + "(dst,src,objectdb) {\n\t\t" + bodies.copyCtorArgs.join("\n\t\t") + "}";
-//	}
 	if (this.fields) {
-		expansions.write = "function write" + function_suffix + "(p,src,objectdb) {\n\t\t" + bodies.write.join("\n\t\t") + "}";
+		expansions.write = "function write" + function_suffix + "(p,src,objectdb,writeOptions) {\n\t\t" + bodies.write.join("\n\t\t") + "}";
 		expansions.read = "function read" + function_suffix + "(p,dst,objectdb) {\n\t\t" + bodies.read.join("\n\t\t") + "}";
-		expansions.copy = "function copy" + function_suffix + "(dst,src,objectdb) {\n\t\t" + bodies.copy.join("\n\t\t") + "}";
+		expansions.copy = "function copy" + function_suffix + "(dst,src,objectdb,copyOptions) {\n\t\t" + bodies.copy.join("\n\t\t") + "}";
 	}
 	return expansions;
 };
@@ -749,9 +765,9 @@ ObjectConfig.prototype.makeExpansions = function() {
 //}
 
 ObjectConfig.prototype.makeFieldExpansions = function (bodies, write_src, read_dst) {
-	bodies.write.push("bserializer.registrationsByIndex["+this.index+"].write(p, " + write_src + ", objectdb);");
+	bodies.write.push("bserializer.registrationsByIndex["+this.index+"].write(p, " + write_src + ", objectdb, writeOptions);");
 	bodies.read.push(read_dst + " = bserializer.registrationsByIndex["+this.index+"].read(p, " + read_dst + ", objectdb);");
-	bodies.copy.push(read_dst + " = bserializer.registrationsByIndex["+this.index+"].copy(" + read_dst + ", " + write_src + ", objectdb);");
+	bodies.copy.push(read_dst + " = bserializer.registrationsByIndex["+this.index+"].copy(" + read_dst + ", " + write_src + ", objectdb, copyOptions);");
 };
 	
 function getTypeConfig(field_type) {
@@ -811,9 +827,9 @@ function makeFieldExpansions(bodies, src, dst, field) {
 			config.makeFieldExpansions(bodies, src, dst, field);
 		}
 		else {
-			bodies.write.push("bserializer.writeGeneric(p, " + src + ", objectdb);");
+			bodies.write.push("bserializer.writeGeneric(p, " + src + ", objectdb, writeOptions);");
 			bodies.read.push(dst + " = bserializer.readGeneric(p, " + dst + ", objectdb);");
-			bodies.copy.push(dst + " = bserializer.copyGeneric(" + dst + ", " + src + ", objectdb);");
+			bodies.copy.push(dst + " = bserializer.copyGeneric(" + dst + ", " + src + ", objectdb, copyOptions);");
 		}
 	}
 }
@@ -848,10 +864,10 @@ ArrayConfig.prototype.equals = function(self, other, objectdb) {
 	return equals;
 };
 
-ArrayConfig.prototype.write = function(p, src, objectdb) {
+ArrayConfig.prototype.write = function(p, src, objectdb, writeOptions) {
 	p.writeSmartUint(src.length);
 	for (var i = 0, l = src.length; i < l; i++) {
-		writeGeneric(p, src[i], objectdb);
+		writeGeneric(p, src[i], objectdb, writeOptions);
 	}
 };
 
@@ -1010,7 +1026,7 @@ ArrayConfig.prototype.read = function(p, dst, objectdb) {
 	return dst;
 };
 
-ArrayConfig.prototype.copy = function (dst, src, objectdb) {
+ArrayConfig.prototype.copy = function (dst, src, objectdb, copyOptions) {
 	if (!Array.isArray(dst)) {
 		dst = [];
 	}
@@ -1018,7 +1034,7 @@ ArrayConfig.prototype.copy = function (dst, src, objectdb) {
 	for (var i = 0 ; i < src.length; i++) {
 		var src_value = src[i];
 		if (typeof src_value !== 'function') {
-			dst[i] = copyGeneric(dst[i], src_value, objectdb);
+			dst[i] = copyGeneric(dst[i], src_value, objectdb, copyOptions);
 		}
 	}
 	return dst;
@@ -1113,37 +1129,6 @@ registerClass(new TypedArrayConfig("Uint32"));
 registerClass(new TypedArrayConfig("Float32"));
 registerClass(new TypedArrayConfig("Float64"));
 
-//registerClass(ArrayBuffer, {
-//	noAnnotate:true,
-//	copy: function(dst, src) {
-//		if (dst != null && dst instanceof ArrayBuffer) {
-//			new Uint8Array(dst).set(new Uint8Buffer(src));
-//		}
-//		else {
-//			dst = src.slice(0);
-//		}
-//		return dst;
-//	},
-//	write: function(p, src) {
-//		var view = Uint8Array(src);
-//		p.writeUint32(view.length);
-//		for (var i = 0, l = view.length; i < l ; i++) {
-//			p.writeUint8(view[i]);
-//		}
-//	},
-//	read: function(p, dst) {
-//		var l = p.readUint32(view.length);
-//		if (dst == null || !(dst instanceof ArrayBuffer)) {
-//			dst = new ArrayBuffer(l);
-//		}
-//		var view = Uint8Array(dst);
-//		for (var i = 0, l = view.length; i < l ; i++) {
-//			p.writeUint8(view[i]);
-//		}
-//		return dst;
-//	}
-//});
-
 
 bserializer.finishExpansions = function(file) {
 	var fs = require('fs');
@@ -1233,7 +1218,7 @@ function detectConfig(src) {
 	return config;
 }
 
-function copyGeneric(dst, src, objectdb, test) {
+function copyGeneric(dst, src, objectdb, copyOptions) {
 	var top_level = typeof objectdb === 'undefined';
 	if (top_level) {
 		objectdb = [];
@@ -1242,7 +1227,7 @@ function copyGeneric(dst, src, objectdb, test) {
 //	if (true) console.log("copyGeneric config=",config, src);
 	if (config) {
 		dst = config.copy(dst, src, objectdb);
-		if (test) {
+		if (copyOptions && copyOptions.test) {
 			var obj_name = (dst && dst.constructor.name);
 			if (!equalsGeneric(dst, src)) {
 				console.error("Copy failed! " + obj_name);
@@ -1284,7 +1269,7 @@ function equalsGeneric(self, other, objectdb) {
 }
 bserializer.equalsGeneric = equalsGeneric;
 
-function writeGeneric(p, src, objectdb) {
+function writeGeneric(p, src, objectdb, writeOptions) {
 	var top_level = typeof objectdb === 'undefined';
 	if (top_level) {
 		objectdb = [];
@@ -1294,7 +1279,7 @@ function writeGeneric(p, src, objectdb) {
 		p.writeSmartUint(config.index);
 //		console.log("writeGeneric @" + p.offset + ': ' + config.index + ": " + (config && (config.name || (config.ctor && config.ctor.name) || '?')) + '@' + p.offset);
 		if (config.write != null) {
-			config.write(p, src, objectdb);
+			config.write(p, src, objectdb, writeOptions);
 		}
 	}
 	else if (typeof src !== 'function') {
@@ -1324,10 +1309,10 @@ function readGeneric(p, dst, objectdb) {
 }
 bserializer.readGeneric = readGeneric;
 
-function serialize(obj, test) {
+function serialize(obj, writeOptions) {
 	if (PACKET_PROFILE) pp = {};
 	packet.reset();
-	bserializer.writeGeneric(packet, obj);
+	bserializer.writeGeneric(packet, obj, undefined, writeOptions);
 	if (PACKET_PROFILE) {
 		var a = [];
 		for (var s in pp) {
@@ -1338,7 +1323,7 @@ function serialize(obj, test) {
 		});
 	}
 	var delivery = packet.getDelivery();
-	if (test) {
+	if (writeOptions && writeOptions.test) {
 		var readpacket = createPacket(delivery);
 		obj = bserializer.readGeneric(readpacket, obj);
 		var obj2 = bserializer.deserialize(delivery);
