@@ -37,6 +37,7 @@ bserializer.registerClass(CANNON.RigidBody, {
 		{name: 'invInertia', type:CANNON.Vec3},
 		{name:'angularDamping', type:'float64'},
 		{name:'shape', static:true},
+		{name: 'aabbNeedsUpdate', type:'boolean'},
 		{name: 'aabbmin', type:CANNON.Vec3},
 		{name: 'aabbmax', type:CANNON.Vec3},
 		'adust_object'])
@@ -154,7 +155,7 @@ bserializer.registerClass(CANNON.World, {
 		{name: 'collisionMatrix', type: [CANNON.ObjectCollisionMatrix, CANNON.ArrayCollisionMatrix]},
 		{name: 'collisionMatrixPrevious', type: [CANNON.ObjectCollisionMatrix, CANNON.ArrayCollisionMatrix]},
 		{name: 'gravity', type: CANNON.Vec3, serialize:false},
-		{name: 'broadphase', serialize:false, directCopy:true}
+		{name: 'broadphase', serialize:false, directCopy:true, equals:false}
 //		,
 //		{name: 'bodies', type: 'array', element:{type:[CANNON.Particle, CANNON.RigidBody]}, serialize:false}
 	]

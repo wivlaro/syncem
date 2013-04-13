@@ -459,7 +459,7 @@ ObjectConfig.prototype.equals = function (self, other, objectdb) {
 	if (this.fields != null) {
 		for (var i = 0, l = this.fields.length; i < l; i++) {
 			var field = this.fields[i];
-			if (!(this.ctor_args && this.ctor_args.indexOf(field.name) !== -1)) {
+			if (field.equals !== false && !(this.ctor_args && this.ctor_args.indexOf(field.name) !== -1)) {
 				var f = field.name;
 				if (!equalsOffset(self, other, f, depth, objectdb)) equals = false;
 			}
