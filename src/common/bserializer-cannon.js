@@ -134,8 +134,8 @@ bserializer.registerClass(CANNON.World, {
 	circular: true,
 	fields: [
 		{name: 'time', type: 'float64'},
-		{name: 'stepnumber', type: 'int32'},
-		{name: 'nextId', type: 'int32'},
+		{name: 'stepnumber', type: 'float64'},
+		{name: 'nextId', type: 'float64'},
 		{name: 'allowSleep', type: 'boolean', serialize:false},
 		{name: 'defaultContactMaterial', serialize:false},
 		{name: 'collisionMatrix', type: [CANNON.ObjectCollisionMatrix, CANNON.ArrayCollisionMatrix]},

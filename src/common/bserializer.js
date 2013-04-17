@@ -844,6 +844,10 @@ function ArrayConfig(name, properties) {
 ArrayConfig.prototype = new BaseConfig();
 ArrayConfig.prototype.constructor = ArrayConfig;
 
+ArrayConfig.prototype.makeTypeCheck = function (variable) {
+	return "Array.isArray(" + variable + ")";
+};
+
 ArrayConfig.prototype.equals = function(self, other, objectdb) {
 	if (!Array.isArray(other)) {
 		console.warn(equals_path.join('.') + " not an array");
