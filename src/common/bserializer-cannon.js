@@ -40,8 +40,7 @@ bserializer.registerClass(CANNON.RigidBody, {
 		{name:'shape', static:true},
 		{name: 'aabbNeedsUpdate', type:'boolean'},
 		{name: 'aabbmin', type:CANNON.Vec3},
-		{name: 'aabbmax', type:CANNON.Vec3},
-		'adust_object'])
+		{name: 'aabbmax', type:CANNON.Vec3}])
 });
 
 CANNON.StaticRigidBody = function() {
@@ -53,8 +52,7 @@ bserializer.registerClass(CANNON.StaticRigidBody, {
 	circular: true,
 	fields:[
 		{name: 'id', type: ['undefined','uint32']},
-		{name: 'index', type: ['undefined','uint32']},
-		'adust_object']
+		{name: 'index', type: ['undefined','uint32']}]
 });
 
 bserializer.registerClass(CANNON.Material,{
