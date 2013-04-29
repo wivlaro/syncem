@@ -240,6 +240,7 @@ function Syncer(config) {
 	this.start_time = null;
 	this.interval = null;
 	this.queuedMoves = {};
+	this.lazyUpdater = false;
 }
 syncem.Syncer = Syncer;
 
@@ -311,6 +312,13 @@ Syncer.prototype.getNowTickPrecise = function() {
 Syncer.prototype.getNowTick = function() {
 	return Math.floor(this.getNowTickPrecise());
 };
+Syncer.prototype.getTargetTick = function() {
+	var target_tick = this.getNowTick();
+	if (this.lazyUpdater) {
+		target_tick -= this.config.lps - 1;
+	}
+	return target_tick;
+};
 
 Syncer.prototype.needsUpdate = function() {
 	var now_tick = this.getNowTick();
@@ -319,10 +327,10 @@ Syncer.prototype.needsUpdate = function() {
 
 Syncer.prototype.update = function() {
 	var updated = false;
-	var now_tick = this.getNowTick();
+	var target_tick = this.getTargetTick();
 	var t0 = new Date().getTime();
-//	console.log("Updating ", this.dirty_tick, "->", now_tick);
-	while (this.dirty_tick < now_tick) {
+//	console.log("Updating ", this.dirty_tick, "->", target_tick);
+	while (this.dirty_tick < target_tick) {
 		var prev_tick = this.dirty_tick++;
 
 //		console.log("copying ", prev_tick, " into ", this.dirty_tick);
@@ -395,9 +403,9 @@ Syncer.prototype.update = function() {
 			break;
 		}
 	}
-	now_tick = this.getNowTick();
-	if (this.dirty_tick + 1 < now_tick)  {
-		console.warn("Falling behind! Updated to " + this.tick + ", but need to be at " + now_tick);
+	target_tick = this.getTargetTick();
+	if (this.dirty_tick + 1 < target_tick)  {
+		console.warn("Falling behind! Updated to " + this.tick + ", but need to be at " + target_tick);
 	}
 	return updated;
 };
