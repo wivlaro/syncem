@@ -34,7 +34,11 @@ function SyncMove(tick, id) {
 }
 SyncMove.prototype = new SyncOb();
 SyncMove.prototype.constructor = SyncMove;
-bserializer.registerClass(SyncMove);
+SyncMove.fieldConfig = [
+	{name:'id', type:'string'},
+	{name:'tick', type:'float64'}
+];
+bserializer.registerClass(SyncMove, SyncMove.fieldConfig);
 syncem.SyncMove = SyncMove;
 
 SyncMove.prototype.checkValid = function(state) {
@@ -52,7 +56,10 @@ function SyncObjectMove(objectId) {
 }
 SyncObjectMove.prototype = new SyncMove();
 SyncObjectMove.prototype.constructor = SyncObjectMove;
-bserializer.registerClass(SyncObjectMove);
+SyncObjectMove.fieldConfig = SyncMove.fieldConfig.concat([
+	{name:'objectId', type:'string'}
+]);
+bserializer.registerClass(SyncObjectMove, SyncObjectMove.fieldConfig);
 syncem.SyncObjectMove = SyncObjectMove;
 
 SyncObjectMove.prototype.checkValid = function(state) {
@@ -61,14 +68,14 @@ SyncObjectMove.prototype.checkValid = function(state) {
 	
 SyncObjectMove.prototype.apply = function(state) {
 	if (this.objectId in state.objects) {
-		this.applyTo(state.objects[this.objectId]);
+		this.applyTo(state, state.objects[this.objectId]);
 	}
 	else {
 		console.warn("Failed to apply move, couldn't find ", this.objectId);
 	}
 };
 	
-SyncObjectMove.prototype.applyTo = function(object) {
+SyncObjectMove.prototype.applyTo = function(state, object) {
 	throw "Unimplemented applyTo";
 };
 
