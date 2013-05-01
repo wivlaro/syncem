@@ -15,7 +15,7 @@ Packet.prototype.getDelivery = function() {
 
 var PACKET_PROFILE = false;
 var GEN_VERBOSITY = {
-	class:false,
+	object:false,
 	field:false,
 	rle:false
 };
@@ -117,32 +117,32 @@ Packet.prototype.readString = function() {
 	var length = this.readSmartUint();
 	var value = '';
 	for (var index = 0; index < length; index ++) {
-		var char = this.readUint8();
-		if (char >= 0xc0) {
-			if (char < 0xe0) {
-				char = ((char & 0x1f) << 6)
+		var chr = this.readUint8();
+		if (chr >= 0xc0) {
+			if (chr < 0xe0) {
+				chr = ((chr & 0x1f) << 6)
 						+ (this.readUint8() & 0x3f);
 			}
-			else if (char < 0xf0) {
-				char = ((char & 0x0f) << 12)
+			else if (chr < 0xf0) {
+				chr = ((chr & 0x0f) << 12)
 						+ ((this.readUint8() & 0x3f) << 6)
 						+ (this.readUint8() & 0x3f);
 			}
-			else if (char < 0xf8) {
-				char = ((char & 0x07) << 18)
+			else if (chr < 0xf8) {
+				chr = ((chr & 0x07) << 18)
 						+ ((this.readUint8() & 0x3f) << 12)
 						+ ((this.readUint8() & 0x3f) << 6)
 						+ (this.readUint8() & 0x3f);
 			}
-			else if (char < 0xfc) {
-				char = ((char & 0x03) << 24)
+			else if (chr < 0xfc) {
+				chr = ((chr & 0x03) << 24)
 						+ ((this.readUint8() & 0x3f) << 18)
 						+ ((this.readUint8() & 0x3f) << 12)
 						+ ((this.readUint8() & 0x3f) << 6)
 						+ (this.readUint8() & 0x3f);
 			}
 			else {
-				char = ((char & 0x01) << 30)
+				chr = ((chr & 0x01) << 30)
 						+ ((this.readUint8() & 0x3f) << 24)
 						+ ((this.readUint8() & 0x3f) << 18)
 						+ ((this.readUint8() & 0x3f) << 12)
@@ -150,7 +150,7 @@ Packet.prototype.readString = function() {
 						+ (this.readUint8() & 0x3f);
 			}
 		}
-		value += String.fromCharCode(char);
+		value += String.fromCharCode(chr);
 	}
 	return value;
 };
@@ -579,7 +579,7 @@ ObjectConfig.prototype.makeExpansions = function() {
 		read:[]
 	};
 	
-	if (GEN_VERBOSITY.class) {
+	if (GEN_VERBOSITY.object) {
 		bodies.write.push("console.log('Writing " + this.ctor.name + " @'+p.offset);");
 		bodies.read.push("console.log('Reading " + this.ctor.name + " @'+p.offset);");
 	}
@@ -1186,15 +1186,15 @@ function detectConfig(src) {
 			break;
 		case 'boolean':
 			if (src === true) {
-				config = registrationsByName.true;
+				config = registrationsByName['true'];
 			}
 			else {
-				config = registrationsByName.false;
+				config = registrationsByName['false'];
 			}
 			break;
 		case 'object':
 			if (src === null) {
-				config = registrationsByName.null;
+				config = registrationsByName['null'];
 			}
 			else if (src.constructor && typeof src.constructor.$bserializerclassid !== 'undefined') {
 				config = registrationsByIndex[src.constructor.$bserializerclassid];
