@@ -78,12 +78,13 @@ bserializer.registerClass(CANNON.ContactMaterial, {
 
 var shape_fields = [
 //	{name:'type', type:'int8'},
-	'aabbmin',
-	'aabbmax',
+	{name:'aabbmin',type:CANNON.Vec3},
+	{name:'aabbmax',type:CANNON.Vec3},
 	{name:'boundingSphereRadius', type:'float64'}
 ];
 bserializer.registerClass(CANNON.Shape, {fields:shape_fields.slice()});
 bserializer.registerClass(CANNON.Box, {
+	circular:true,
 	ctor_args:['halfExtents'], 
 	fields:shape_fields.concat([
 		'halfExtents'

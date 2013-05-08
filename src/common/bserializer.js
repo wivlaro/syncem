@@ -589,11 +589,17 @@ ObjectConfig.prototype.makeExpansions = function() {
 		bodies.copy.push("if (typeof dst_orig !== 'undefined') return dst_orig;");
 		bodies.read.push(
 			"var b_already_read = p.readBoolean();",
+			"var n_reference;",
 			"if (b_already_read) {",
-			"	var reference = p.readSmartUint();",
-			"	dst = objectdb[reference];",
-			//"	console.log("read circular object @", reference, this.name || this.ctor.name || this.index);",
+			"	var n_reference = p.readSmartUint();",
+			"	dst = objectdb[n_reference];",
+//			'	console.log("read circular object @", n_reference, dst);',
 			"	return dst;",
+			"}",
+			"else {",
+			"	//Keep a placeholder, so constructor arguments don't take the slot",
+			"	n_reference = objectdb.length;",
+			"	objectdb.push(null);",
 			"}");
 		bodies.write.push(
 			"var b_already_written = typeof src.$bserializer_writeIndex !== 'undefined';",
@@ -603,6 +609,7 @@ ObjectConfig.prototype.makeExpansions = function() {
 			"	return;",
 			"}",
 			"else {",
+//			'	console.log("wrote circular object @", objectdb.length, src);',
 			"	src.$bserializer_writeIndex = objectdb.length;",
 			"	objectdb.push(src);",
 			"}");
@@ -639,6 +646,7 @@ ObjectConfig.prototype.makeExpansions = function() {
 						if (field.serialize === false) {
 							lines = [];
 						}
+						break;
 					case 'copy':
 						if (field.directCopy === true) {
 							lines.push(read_dst + '=src.' + field.name + ';');
@@ -710,8 +718,8 @@ ObjectConfig.prototype.makeExpansions = function() {
 	if (this.circular) {
 		bodies.copy.push('this.setCopyCircular(dst, src, objectdb);');
 		bodies.read.push(
-				//"console.log("read new circular ref @", reference, this.name || this.ctor.name || this.index);",
-				"objectdb.push(dst);"
+//				'console.log("read new circular ref @", objectdb.length, dst);',
+				"objectdb[n_reference] = dst;"
 			);
 	}
 	
