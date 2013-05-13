@@ -98,6 +98,9 @@ ObjectAddedMove.prototype.apply = function(state) {
 		system:true
 	});
 };
+ObjectAddedMove.prototype.checkValid = function(state) {
+	return !(this.objectId in state.objects);
+};
 
 
 function ObjectRemovedMove(objectId) {
@@ -185,7 +188,13 @@ SyncRoot.prototype.applyMoves = function() {
 	}
 	moveIds.sort();
 	for (var i = 0 ; i < moveIds.length; i++) {
-		this.moves[moveIds[i]].apply(this);
+		var move = this.moves[moveIds[i]];
+		if (move.checkValid(this)) {
+			move.apply(this);
+		}
+		else {
+			console.warn("Move invalid! ", move);
+		}
 	}
 };
 
