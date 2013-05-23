@@ -257,6 +257,7 @@ function Syncer(config) {
 	this.interval = null;
 	this.queuedMoves = {};
 	this.lazyUpdater = false;
+	this.pauseTick = null;
 }
 syncem.Syncer = Syncer;
 
@@ -278,7 +279,9 @@ Syncer.prototype.startInterval = function() {
 	console.log("startInterval with time ", new Date(syncer.start_time));
 	var interval_ms = 1000 / this.config.lps;
 	this.interval = setInterval(function() {
-		syncer.update();
+		if (syncer.pauseTick === null) {
+			syncer.update();
+		}
 	}, interval_ms);
 };
 
@@ -287,6 +290,36 @@ Syncer.prototype.stop = function() {
 		clearInterval(this.interval);
 		this.interval = null;
 	}
+};
+
+Syncer.prototype.pause = function() {
+	var pauseTick = this.getNowTick();
+	this.pauseAt(pauseTick);
+	return pauseTick;
+};
+
+Syncer.prototype.pauseAt = function(pauseTick) {
+	this.pauseTick = pauseTick;
+	this.stop();
+};
+
+Syncer.prototype.unpause = function() {
+	var unpauseTime = getTime();
+	this.unpauseAt(unpauseTime);
+	return unpauseTime;
+};
+
+Syncer.prototype.unpauseAt = function(now) {
+	// (now - this.start_time) * this.config.lps / 1000 = tick;
+	// (tick * 1000 / this.config.lps) = now - this.start_time
+	// this.start_time = now - (tick * 1000 / this.config.lps)
+	this.start_time = now - (this.pauseTick * 1000 / this.config.lps);
+	this.pauseTick = null;
+	this.startInterval();
+};
+
+Syncer.prototype.isPaused = function() {
+	return this.pauseTick !== null;
 };
 
 Syncer.prototype.addMove = function(move, allowFuture) {
@@ -323,7 +356,11 @@ Syncer.prototype.addMove = function(move, allowFuture) {
 
 Syncer.prototype.getNowTickPrecise = function() {
 	var now = getTime();
-	return (now - this.start_time) * this.config.lps / 1000;
+	var nowTick = (now - this.start_time) * this.config.lps / 1000;
+	if (this.isPaused() && nowTick > this.pauseTick) {
+		nowTick = this.pauseTick;
+	}
+	return nowTick;
 };
 Syncer.prototype.getNowTick = function() {
 	return Math.floor(this.getNowTickPrecise());
@@ -474,11 +511,19 @@ function SetupPacket(syncer, user_id) {
 		this.config = syncer.config;
 		this.oldest = syncer.states[oldest_tick % syncer.config.history_size];
 		this.start_time = syncer.start_time;
+		this.pauseTick = syncer.pauseTick;
 		this.moves = syncer.getAllMovesByTick();
 		this.user_id = user_id;
 	}
 }
-bserializer.registerClass(SetupPacket);
+bserializer.registerClass(SetupPacket, [
+	{name:'config', type:'object'},
+	{name:'oldest'},
+	{name:'start_time', type:'float64'},
+	{name:'pauseTick', type:'float64'},
+	{name:'moves', type:'object'},
+	{name:'user_id', type:'string'}
+]);
 syncem.SetupPacket = SetupPacket;
 
 SetupPacket.prototype.createSyncer = function() {
@@ -539,6 +584,23 @@ function StartRequestPacket() {
 syncem.StartRequestPacket = StartRequestPacket;
 bserializer.registerClass(StartRequestPacket, [
 ]);
+
+function PauseRequestPacket(pauseTick) {
+	this.pauseTick = pauseTick;
+}
+syncem.PauseRequestPacket = PauseRequestPacket;
+bserializer.registerClass(PauseRequestPacket, [
+	{name:'pauseTick',type:'float64'}
+]);
+
+function UnpauseRequestPacket(unpauseTime) {
+	this.unpauseTime = unpauseTime;
+}
+syncem.UnpauseRequestPacket = UnpauseRequestPacket;
+bserializer.registerClass(UnpauseRequestPacket, [
+	{name:'unpauseTime',type:'float64'}
+]);
+
 
 })(typeof exports === 'undefined'? this['syncem']={}: exports);
 
