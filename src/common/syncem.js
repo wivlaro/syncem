@@ -520,7 +520,7 @@ bserializer.registerClass(SetupPacket, [
 	{name:'config', type:'object'},
 	{name:'oldest'},
 	{name:'start_time', type:'float64'},
-	{name:'pauseTick', type:'float64'},
+	{name:'pauseTick', type:['null','float64']},
 	{name:'moves', type:'object'},
 	{name:'user_id', type:'string'}
 ]);
@@ -533,8 +533,11 @@ SetupPacket.prototype.createSyncer = function() {
 	syncer.tick = syncer.dirty_tick = this.oldest.tick;
 	syncer.start_time = this.start_time;
 	syncer.queuedMoves = this.moves;
+	syncer.pauseTick = this.pauseTick;
 	syncer.update();
-	syncer.startInterval();
+	if (!syncer.isPaused()) {
+		syncer.startInterval();
+	}
 	return syncer;
 };
 
