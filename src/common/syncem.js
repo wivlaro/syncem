@@ -1,14 +1,14 @@
 (function(syncem) {
 	
-var timeOffset = 0;
+syncem.timeOffset = 0;
 function getTime() {
-	return new Date().getTime() + timeOffset;
+	return new Date().getTime() + syncem.timeOffset;
 }
 syncem.getTime = getTime;
 
 function lerpTimeOffset(target_offset, lerp) {
 	if (typeof lerp === 'undefined') lerp = 0.5;
-	timeOffset += (target_offset - timeOffset) * lerp;
+	syncem.timeOffset += (target_offset - syncem.timeOffset) * lerp;
 }
 syncem.lerpTimeOffset = lerpTimeOffset;
 
@@ -276,7 +276,7 @@ Syncer.prototype.start = function(state, tick) {
 
 Syncer.prototype.startInterval = function() {
 	var syncer = this;
-	console.log("startInterval with time ", new Date(syncer.start_time));
+	console.log("startInterval with time ", new Date(syncer.start_time), syncer.start_time);
 	var interval_ms = 1000 / this.config.lps;
 	this.interval = setInterval(function() {
 		if (syncer.pauseTick === null) {
