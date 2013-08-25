@@ -1114,6 +1114,23 @@ function TypedArrayConfig(prefix) {
 TypedArrayConfig.prototype = new BaseConfig();
 TypedArrayConfig.prototype.constructor = TypedArrayConfig;
 
+TypedArrayConfig.prototype.equals = function(self, other, objectdb) {
+	if (self.constructor !== other.constructor) {
+		console.warn(equals_path.join('.') + " not the same type of array " + self.constructor + ' !== ' + other.constructor);
+		return false;
+	}
+	if (self.length !== other.length) {
+		console.warn(equals_path.join('.') + " array length mismatch ", self.length, "!=", other.length);
+		return false;
+	}
+	for (var i = 0, l = self.length; i < l ; i++) {
+		if (self[i] !== other[i]) {
+			return false;
+		}
+	}
+	return true;
+};
+
 TypedArrayConfig.prototype.makeExpansions = function() {
 	var expansion = {
 		Prefix: this.prefix

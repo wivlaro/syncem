@@ -1,32 +1,45 @@
 (function(mygame){
 	
-mygame.LPS = 32;
+mygame.LPS = 30;
 
 mygame.NUM_CELLS_X = 50;
 mygame.NUM_CELLS_Y = 30;
+//mygame.NUM_CELLS_X = 5;
+//mygame.NUM_CELLS_Y = 3;
 
 
 function Cell() {
-	this.red = 0;
-	this.green = 0;
-	this.blue = 0;
+	//ATTEMPT ONE:
+//	this.strengths = [0,0,0];
+
+	//ATTEMPT TWO:
+	this.strength0 = 0;
+	this.strength1 = 0;
+	this.strength2 = 0;
 }
 bserializer.registerClass(Cell, [
-	{name:'red', type:'uint8'},
-	{name:'green', type:'uint8'},
-	{name:'blue', type:'uint8'}
+	//ATTEMPT ONE:
+//	{name:'strengths', type:'array', element:{type:'uint8'}}
+//	
+	//ATTEMPT TWO:
+	{name:'strength0', type:'uint8'},
+	{name:'strength1', type:'uint8'},
+	{name:'strength2', type:'uint8'}
 ]);
 
 
 function MyGame() {
 	syncem.SyncRoot.apply(this);
 	
-	this.cells = [];
-	for (var y = 0; y < mygame.NUM_CELLS_Y; y++) {
-		for (var x = 0; x < mygame.NUM_CELLS_X; x++) {
-			this.cells.push(new Cell());
-		}
-	}
+//	this.cells = [];
+//	for (var y = 0; y < mygame.NUM_CELLS_Y; y++) {
+//		for (var x = 0; x < mygame.NUM_CELLS_X; x++) {
+//			this.cells.push(new Cell());
+//		}
+//	}
+
+	this.cells = new Uint32Array(mygame.NUM_CELLS_X * mygame.NUM_CELLS_Y);
+
 	this.teamSizes = [0,0,0];
 	this.weakestTeam = 0;
 }
@@ -35,27 +48,24 @@ MyGame.prototype.constructor = MyGame;
 mygame.MyGame = MyGame;
 bserializer.registerClass(MyGame, {
 	fields:[
-		{name:'cells', type:'array-rle', element:{type:Cell}},
-		{name:'teamSizes', type:'array', element:{type:'uint8'}}
-//		{name:'seed', type:'uint32', serialize:false},
-//		{name:'world', type:CANNON.World},
-//		{name:'organisations'},
-//		{name:'grid', type:'array', element:{type:['undefined',building.Building]}},
-//		{name:'config', type:'object'},
-//		{name:'technologies', serialize:false, directCopy:true},
-//		{name:'rostrums', serialize:false, directCopy:true},
-//		{name:'currentRostrum', type:'uint8'}
-	].concat(syncem.syncRootFields),
-	onPreWriteFields: function(p, src, objectdb) {
-	},
-	onPreReadFields: function(p, dst, objectdb) {
-	},
-	onPostReadFields: function(p, dst, objectdb) {
-	},
-	onPreCopyFields: function(dst, src, objectdb) {
-	},
-	onPostCopyFields: function(dst, src, objectdb) {
-	}
+		{name:'teamSizes', type:'array', element:{type:'uint8'}},
+		
+		//Attempt ONE and TWO
+//		{name:'cells', type:'array-rle', element:{type:Cell}},
+
+		//Attempt THREE
+		{name:'cells', type:Uint32Array}
+	].concat(syncem.syncRootFields)
+//	onPreWriteFields: function(p, src, objectdb) {
+//	},
+//	onPreReadFields: function(p, dst, objectdb) {
+//	},
+//	onPostReadFields: function(p, dst, objectdb) {
+//	},
+//	onPreCopyFields: function(dst, src, objectdb) {
+//	},
+//	onPostCopyFields: function(dst, src, objectdb) {
+//	}
 });
 
 
@@ -78,10 +88,35 @@ MyGame.prototype.update = function() {
 		this.teamSizes[obj.teamIndex]++;
 	}
 	
-	for (var ci = 0; ci < this.cells.length; ci++) {
-		var cell = this.cells[ci];
-		if (cell.strength > 0) {
-			cell.strength -= 1;
+	function getColourPresences(col) {
+		col = ((col >> 4)&0x0f0f0f) | col;
+		col = ((col >> 2)&0x030303) | col;
+		return ((col >> 1) | col)&0x010101;
+	}
+	
+	var NUM_CELLS = mygame.NUM_CELLS_X * mygame.NUM_CELLS_Y;
+	for (var yoff0 = NUM_CELLS - mygame.NUM_CELLS_X*2, yoff1 = NUM_CELLS - mygame.NUM_CELLS_X, yoff2 = 0; yoff2 < NUM_CELLS; yoff0 = yoff1, yoff1 = yoff2, yoff2+=mygame.NUM_CELLS_X) {
+		for (var xoff0 = mygame.NUM_CELLS_X - 2, xoff1 = mygame.NUM_CELLS_X - 1, xoff2 = 0; xoff2 < mygame.NUM_CELLS_X; xoff0 = xoff1, xoff1 = xoff2, xoff2++) {
+	
+			var cell =	this.cells[yoff1 + xoff1];
+			var neighbourCounts = 
+				getColourPresences(this.cells[yoff0 + xoff0]) +
+				getColourPresences(this.cells[yoff0 + xoff1]) +
+				getColourPresences(this.cells[yoff0 + xoff2]) +
+				getColourPresences(this.cells[yoff1 + xoff0]) +
+				getColourPresences(this.cells[yoff1 + xoff2]) +
+				getColourPresences(this.cells[yoff2 + xoff0]) +
+				getColourPresences(this.cells[yoff2 + xoff1]) +
+				getColourPresences(this.cells[yoff2 + xoff2]);
+
+			var dec = 0, inc = 0;
+			if ((cell & 0x0000ff) && (neighbourCounts & 0x0000ff) < 0x000003) dec += 0x000001;
+			else if ((cell & 0x0000ff) < 0x0000ff && (neighbourCounts & 0x0000ff) > 0x000005) inc += 0x000001;
+			if ((cell & 0x00ff00) && (neighbourCounts & 0x00ff00) < 0x000300) dec += 0x000100;
+			else if ((cell & 0x00ff00) < 0x00ff00 && (neighbourCounts & 0x00ff00) > 0x000500) inc += 0x000100;
+			if ((cell & 0xff0000) && (neighbourCounts & 0xff0000) < 0x030000) dec += 0x010000;
+			else if ((cell & 0xff0000) < 0xff0000 && (neighbourCounts & 0xff0000) > 0x050000) inc += 0x010000;
+			this.cells[yoff1 + xoff1] = (cell - dec) + inc;
 		}
 	}
 	
