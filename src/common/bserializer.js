@@ -1,5 +1,58 @@
 (function(bserializer) {
 
+if (typeof global === 'undefined' && typeof window !== 'undefined') {
+	window.global = window;
+}
+
+function array_append(a1, a2) {
+	a1.push.apply(a1, a2);
+};
+
+function for_each(a, f) {
+	for (var i = 0, l = a.length; i < l; i++) f(a[i], i);
+};
+
+function map(a, f) {
+	var r = []; r.length = a.length;
+	for (var i = 0, l = a.length; i < l; i++) r[i] = f(a[i]);
+	return r;
+};
+
+function expand_template() {
+	var strings = [];
+	var replacements = {};
+	for (var i = 0; i < arguments.length; i++) {
+		var arg = arguments[i];
+		//Strings are the templates
+		if (typeof arg === 'string') {
+			if (typeof strings === 'undefined') strings = [];
+			strings.push(arg);
+		}
+		else if (Array.isArray(arg)) {
+			if (typeof strings === 'undefined') strings = arg;
+			else strings = strings.concat(arg);
+		}
+		else if (typeof arg === 'object' && arg !== null) {
+			for (var k in arg) {
+				replacements[k] = arg[k];
+			}
+		}
+	}
+	for (var i = 0, l = strings.length; i < l; i++) {
+		for (var k in replacements) {
+			strings[i] = strings[i].replace(new RegExp('@'+k+'\\b@?', 'g'), arg[k]);
+		}
+	}
+	return strings;
+};
+
+function indent(indentation, strings) {
+	return map(strings, function (string) {
+		return indentation + string;
+	});
+};
+
+
 function Packet(arrayBuffer) {
 	this.impl = new DataView(arrayBuffer);
 	this.offset = 0;
@@ -370,12 +423,12 @@ PrimitiveConfig.prototype.typeCapitalised = function() {
 PrimitiveConfig.prototype.makeExpansions = function() {
 	var expansion = {Type:this.typeCapitalised()};
 	return {
-		write: autil.expand_template(
+		write: expand_template(
 			"function write@Type(p, src) {",
 			"	p.write@Type(src);",
 			"}",
 			expansion),
-		read: autil.expand_template(
+		read: expand_template(
 			"function read@Type(p) {",
 			"	return p.read@Type();",
 			"}",
@@ -679,7 +732,7 @@ ObjectConfig.prototype.makeExpansions = function() {
 	
 	var ctor_syms = [];
 	if (this.ctor_args) {
-		ctor_syms = autil.map(this.ctor_args, function (ctor_arg_name) {
+		ctor_syms = map(this.ctor_args, function (ctor_arg_name) {
 			var field_config = get_field_config(ctor_arg_name);
 			if (field_config === null) {
 				field_config = {name:ctor_arg_name, type:'generic'};
@@ -734,7 +787,7 @@ ObjectConfig.prototype.makeExpansions = function() {
 	}
 	
 	if (this.fields) {
-		autil.for_each(this.fields, function(field) {
+		for_each(this.fields, function(field) {
 			output_expansions(bodies, field);
 		});
 	}
@@ -795,7 +848,7 @@ function getTypeConfig(field_type) {
 function makeFieldExpansions(bodies, src, dst, field) {
 //	writes.push("console.log('Writing " + src + ": ' + ("+src+" ? "+src+".length : "+src+"));");
 	if (field && Array.isArray(field.type)) {
-		var configs = autil.map(field.type, getTypeConfig);
+		var configs = map(field.type, getTypeConfig);
 		bodies.read.push('switch (p.readUint8()) {');
 		for (var i = 0, l = configs.length; i < l; i++) {
 			var config = configs[i];
@@ -819,14 +872,14 @@ function makeFieldExpansions(bodies, src, dst, field) {
 		}
 
 		bodies.copy.push("else {");
-		bodies.copy.push("	throw 'Unhandled type on copy ' + (" + src + " && " + src + ".constructor);");
+		bodies.copy.push("	throw 'Unhandled type on copy of " + field.name + ": ' + (" + src + " && " + src + ".constructor);");
 		bodies.copy.push('}');
 		bodies.write.push("else {");
-		bodies.write.push("	throw 'Unhandled type on write ' + (" + src + " && " + src + ".constructor);");
+		bodies.write.push("	throw 'Unhandled type on write of " + field.name + ": ' + (" + src + " && " + src + ".constructor);");
 		bodies.write.push('}');
 
 		bodies.read.push("	default:");
-		bodies.read.push("		throw 'Unhandled type on read';");
+		bodies.read.push("		throw 'Unhandled type on read of " + field.name + "';");
 		bodies.read.push('}');
 	}
 	else {
@@ -900,7 +953,7 @@ ArrayConfig.prototype.makeFieldExpansions = function (bodies, src_expr, dst, fie
 	makeFieldExpansions(element_bodies, src_el, dst_el, field.element);
 	
 	if (this.rle) {
-		autil.array_append(bodies.write, autil.expand_template(
+		array_append(bodies.write, expand_template(
 			"var @src_temp = @src_expr, @l = @src_temp.length, @src_el;",
 			"p.writeSmartUint(@l);",
 			"var @i = 0, @block_start = 0;",
@@ -913,7 +966,7 @@ ArrayConfig.prototype.makeFieldExpansions = function (bodies, src_expr, dst, fie
 			GEN_VERBOSITY.rle && 
 			"		console.log('Write @src_expr from ' + @block_start + '-' + @i + '/' + @l + ':' + @src_el);",
 			"		p.writeSmartUint(@i - @block_start - 1);", //-1 because we can't write 0 elements
-			autil.indent("		", element_bodies.write),
+			indent("		", element_bodies.write),
 			"		@block_start = @i;",
 			"		if (@i === @l) break;",
 			"	}",
@@ -928,7 +981,7 @@ ArrayConfig.prototype.makeFieldExpansions = function (bodies, src_expr, dst, fie
 			}
 		));
 			
-		autil.array_append(bodies.read, autil.expand_template(
+		array_append(bodies.read, expand_template(
 			"var @l = p.readSmartUint();",
 			"if (@dst == null) {",
 			"	@dst = [];",
@@ -940,7 +993,7 @@ ArrayConfig.prototype.makeFieldExpansions = function (bodies, src_expr, dst, fie
 			"	if (@i === @next_read) {",
 			"		@next_read += 1 + p.readSmartUint();",
 			"		@dst_el = @dst[@i];",
-			autil.indent("		",element_bodies.read),
+			indent("		",element_bodies.read),
 			GEN_VERBOSITY.rle && 
 			"		console.log('Read @dst until ' + @next_read + '/' + @l + ':' + @dst_el);",
 			"	}",
@@ -956,13 +1009,13 @@ ArrayConfig.prototype.makeFieldExpansions = function (bodies, src_expr, dst, fie
 		));
 	}
 	else {
-		autil.array_append(bodies.write, autil.expand_template(
+		array_append(bodies.write, expand_template(
 			"var @src_temp = @src_expr, @l = @src_temp.length;",
 			"p.writeSmartUint(@l);",
 			"for (var @i = 0, @src_el; @i < @l; @i++) {",
 			'	@src_el = @src_temp[@i];',
 //			'	console.log("Writing " + @i + "/" + @l + ": " + @src_el);',
-			autil.indent('	',element_bodies.write),
+			indent('	',element_bodies.write),
 			"}",
 			{
 				src_el:src_el,
@@ -973,7 +1026,7 @@ ArrayConfig.prototype.makeFieldExpansions = function (bodies, src_expr, dst, fie
 			}
 		));
 			
-		autil.array_append(bodies.read, autil.expand_template(
+		array_append(bodies.read, expand_template(
 			"var @l = p.readSmartUint();",
 			"if (@dst == null || @dst.length !== @l) {",
 			"	@dst = [];",
@@ -981,7 +1034,7 @@ ArrayConfig.prototype.makeFieldExpansions = function (bodies, src_expr, dst, fie
 			"}",
 			"for (var @i = 0, @dst_el; @i < @l; @i++) {",
 			"	@dst_el = @dst[@i];",
-			autil.indent('	',element_bodies.read),
+			indent('	',element_bodies.read),
 			"	@dst[@i] = @dst_el;",
 			"}",
 			{
@@ -994,7 +1047,7 @@ ArrayConfig.prototype.makeFieldExpansions = function (bodies, src_expr, dst, fie
 	}
 	
 	
-	autil.array_append(bodies.copy, autil.expand_template(
+	array_append(bodies.copy, expand_template(
 		"var @src_temp = @src_expr;",
 //		"var @dst_temp = @dst;",
 		"var @l = @src_temp.length;",
@@ -1007,7 +1060,7 @@ ArrayConfig.prototype.makeFieldExpansions = function (bodies, src_expr, dst, fie
 		"for (var @i = 0, @dst_el, @src_el; @i < @l; @i++) {",
 		"	@dst_el = @dst_temp[@i];",
 		"	@src_el = @src_temp[@i];",
-		autil.indent("	",element_bodies.copy),
+		indent("	",element_bodies.copy),
 //			"		console.log('Read @dst until ' + @next_read + '/' + @l + ':' + @el_dst);",
 		"	@dst_temp[@i] = @dst_el;",
 		"}",
@@ -1066,7 +1119,7 @@ TypedArrayConfig.prototype.makeExpansions = function() {
 		Prefix: this.prefix
 	};
 	return {
-		write: autil.expand_template(
+		write: expand_template(
 			"function write@Prefix(p,src) {",
 			"	var l = src.length;",
 			"	p.writeSmartUint(l);",
@@ -1075,7 +1128,7 @@ TypedArrayConfig.prototype.makeExpansions = function() {
 			"	}",
 			"}",
 			expansion),
-		read: autil.expand_template(
+		read: expand_template(
 			"function read@Prefix(p,dst) {",
 			"	var l = p.readSmartUint();",
 			"	if (dst == null || dst.constructor !== @Prefix@Array || dst.length !== l) {",
@@ -1087,7 +1140,7 @@ TypedArrayConfig.prototype.makeExpansions = function() {
 			"	return dst;",
 			"}",
 			expansion),
-		copy: autil.expand_template(
+		copy: expand_template(
 			"function copy@Prefix(dst,src,objectdb) {",
 			"	if (src == null) {",
 			"		dst = src;",
@@ -1273,7 +1326,7 @@ function equalsGeneric(self, other, objectdb) {
 	var config = detectConfig(self);
 	var equal = config.equals(self, other, objectdb);
 	if (is_top_level) {
-		autil.for_each(objectdb, function(obj) {
+		for_each(objectdb, function(obj) {
 			delete obj.$bserializer_equalsid;
 		});
 	}
@@ -1363,5 +1416,13 @@ function deserialize(buffer, obj) {
 }
 
 bserializer.deserialize = deserialize;
+
+function detectType(buffer) {
+	var packet = createPacket(buffer);
+	var index = packet.readSmartUint();
+	var config = registrationsByIndex[index];
+	return config;
+}
+bserializer.detectType = detectType;
 
 })(typeof exports === 'undefined'? this.bserializer = {}: exports);

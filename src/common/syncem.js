@@ -582,10 +582,12 @@ bserializer.registerClass(ChecksumPacket, [
 	{name:'checksum',type:'int32'}
 ]);
 
-function StartRequestPacket() {
+function StartRequestPacket(name) {
+	this.name = name;
 }
 syncem.StartRequestPacket = StartRequestPacket;
 bserializer.registerClass(StartRequestPacket, [
+	{name:'name',type:'string'}
 ]);
 
 function PauseRequestPacket(pauseTick) {
