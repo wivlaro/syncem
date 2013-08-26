@@ -1,0 +1,15 @@
+{
+  "name": "Syncem",
+  "version": "1.0.0",
+  "scripts": {
+    "debug": "node --stack_trace_limit=20 --debug src/server/main.js",
+    "start": "node src/server/main.js"
+  },
+  "dependencies": {
+    "express": "3.0.6",
+    "ws": "0.4.25"
+  },
+  "engines": {
+    "node": "0.8.x"
+  }
+}

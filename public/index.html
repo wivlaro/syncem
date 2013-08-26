@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Syncem Test</title>
+	<link rel='stylesheet' type='text/css' href="/style.css" />
+	<script type='text/javascript' src='/common/bserializer.js'></script>
+	<script type='text/javascript' src='/common/syncem.js'></script>
+	<script type='text/javascript' src='/common/player.js'></script>
+	<script type='text/javascript' src='/common/mygame.js'></script>
+	<script type='text/javascript' src='/common/bserializer_expansions.js'></script>
+	<script type='text/javascript' src='/client/main.js'></script>
+	<script type='text/javascript' src='/get-uid.js'></script>
+	<link rel="icon" type="image/png" href="favicon.png" />
+</head>
+<body onload='onLoad();'>
+	<h1>Syncem Test</h1>
+	<div id='canvas-container'>
+		<canvas id='canvas' width="800" height="480"></canvas>
+	</div>
+	<form onsubmit="sendChat(); return false;">
+		Chat: <input id='chat-input' type='text' />
+	</form>
+	<div class='status-info'>Status: <span id='connection-status'>Loading</span></div>
+</body>
+</html>
