@@ -42,6 +42,7 @@ function MyGame() {
 
 	this.teamSizes = [0,0,0];
 	this.weakestTeam = 0;
+	this.teamScores = [0,0,0];
 }
 MyGame.prototype = new syncem.SyncRoot();
 MyGame.prototype.constructor = MyGame;
@@ -49,6 +50,7 @@ mygame.MyGame = MyGame;
 bserializer.registerClass(MyGame, {
 	fields:[
 		{name:'teamSizes', type:'array', element:{type:'uint8'}},
+		{name:'teamScores', type:'array', element:{type:'float64'}},
 		
 		//Attempt ONE and TWO
 //		{name:'cells', type:'array-rle', element:{type:Cell}},
@@ -78,6 +80,7 @@ MyGame.prototype.update = function() {
 	
 	for (var ti = 0; ti < this.teamSizes.length; ti++) {
 		this.teamSizes[ti] = 0;
+		this.teamScores[ti] = 0;
 	}
 	var keys = Object.keys(this.objects);
 	keys.sort();
@@ -109,17 +112,21 @@ MyGame.prototype.update = function() {
 				getColourPresences(this.cells[yoff2 + xoff1]) +
 				getColourPresences(this.cells[yoff2 + xoff2]);
 
-			var cell_r = (cell>>16) & 0xff;
+			var cell_r = cell & 0xff;
 			var cell_g = (cell>>8) & 0xff;
-			var cell_b = cell & 0xff;
+			var cell_b = (cell>>16) & 0xff;
+			
+			this.teamScores[0] += cell_r;
+			this.teamScores[1] += cell_g;
+			this.teamScores[2] += cell_b;
 
 			var dec = 0, inc = 0;
-			if (cell_b > 0 && (neighbourCounts & 0x0000ff) < 0x000003) dec += 0x000001;
-			else if (cell_b < 255 && cell_b >= cell_r && cell_b >= cell_g  && (neighbourCounts & 0x0000ff) > 0x000005) inc += 0x000001;
+			if (cell_r > 0 && (neighbourCounts & 0x0000ff) < 0x000003) dec += 0x000001;
+			else if (cell_r < 255 && cell_r >= cell_b && cell_r >= cell_g  && (neighbourCounts & 0x0000ff) > 0x000005) inc += 0x000001;
 			if (cell_g > 0 && (neighbourCounts & 0x00ff00) < 0x000300) dec += 0x000100;
-			else if (cell_g < 255 && cell_g >= cell_r && cell_g >= cell_b  && (neighbourCounts & 0x00ff00) > 0x000500) inc += 0x000100;
-			if (cell_r > 0 && (neighbourCounts & 0xff0000) < 0x030000) dec += 0x010000;
-			else if (cell_r < 255 && cell_r >= cell_g && cell_r >= cell_b && (neighbourCounts & 0xff0000) > 0x050000) inc += 0x010000;
+			else if (cell_g < 255 && cell_g >= cell_b && cell_g >= cell_r  && (neighbourCounts & 0x00ff00) > 0x000500) inc += 0x000100;
+			if (cell_b > 0 && (neighbourCounts & 0xff0000) < 0x030000) dec += 0x010000;
+			else if (cell_b < 255 && cell_b >= cell_g && cell_b >= cell_r && (neighbourCounts & 0xff0000) > 0x050000) inc += 0x010000;
 			this.cells[yoff1 + xoff1] = (cell - dec) + inc;
 		}
 	}
