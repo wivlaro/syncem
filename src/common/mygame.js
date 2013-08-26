@@ -109,13 +109,17 @@ MyGame.prototype.update = function() {
 				getColourPresences(this.cells[yoff2 + xoff1]) +
 				getColourPresences(this.cells[yoff2 + xoff2]);
 
+			var cell_r = (cell>>16) & 0xff;
+			var cell_g = (cell>>8) & 0xff;
+			var cell_b = cell & 0xff;
+
 			var dec = 0, inc = 0;
-			if ((cell & 0x0000ff) && (neighbourCounts & 0x0000ff) < 0x000003) dec += 0x000001;
-			else if ((cell & 0x0000ff) < 0x0000ff && (neighbourCounts & 0x0000ff) > 0x000005) inc += 0x000001;
-			if ((cell & 0x00ff00) && (neighbourCounts & 0x00ff00) < 0x000300) dec += 0x000100;
-			else if ((cell & 0x00ff00) < 0x00ff00 && (neighbourCounts & 0x00ff00) > 0x000500) inc += 0x000100;
-			if ((cell & 0xff0000) && (neighbourCounts & 0xff0000) < 0x030000) dec += 0x010000;
-			else if ((cell & 0xff0000) < 0xff0000 && (neighbourCounts & 0xff0000) > 0x050000) inc += 0x010000;
+			if (cell_b > 0 && (neighbourCounts & 0x0000ff) < 0x000003) dec += 0x000001;
+			else if (cell_b < 255 && cell_b >= cell_r && cell_b >= cell_g  && (neighbourCounts & 0x0000ff) > 0x000005) inc += 0x000001;
+			if (cell_g > 0 && (neighbourCounts & 0x00ff00) < 0x000300) dec += 0x000100;
+			else if (cell_g < 255 && cell_g >= cell_r && cell_g >= cell_b  && (neighbourCounts & 0x00ff00) > 0x000500) inc += 0x000100;
+			if (cell_r > 0 && (neighbourCounts & 0xff0000) < 0x030000) dec += 0x010000;
+			else if (cell_r < 255 && cell_r >= cell_g && cell_r >= cell_b && (neighbourCounts & 0xff0000) > 0x050000) inc += 0x010000;
 			this.cells[yoff1 + xoff1] = (cell - dec) + inc;
 		}
 	}
