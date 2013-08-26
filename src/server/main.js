@@ -24,7 +24,7 @@ var app = express(),
 var wss = new ws.Server({server: server});
 
 app.configure(function() {
-	app.set('port', process.env.PORT || 3000);
+	app.set('port', process.env.PORT || 3001);
 	app.set('views', PROJ_ROOT + '/views');
 	app.set('view engine', 'hjs');
 	app.use(express.favicon(PROJ_ROOT+'/public/favicon.ico'));
