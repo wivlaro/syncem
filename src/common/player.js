@@ -10,8 +10,8 @@ function Player(id, name) {
 	this.index = null;
 	this.teamIndex = -1;
 	this.name = name;
-	this.x8 = 100;
-	this.y8 = 100;
+	this.x8 = mygame.NUM_CELLS_X << 4 + 7;
+	this.y8 = mygame.NUM_CELLS_Y << 4 + 7;
 	this.vx8 = 0;
 	this.vy8 = 0;
 }

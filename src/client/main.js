@@ -307,12 +307,6 @@ function renderScene(state) {
 	for (var y = 0, i = 0; y < mygame.NUM_CELLS_Y; y++) {
 		for (var x = 0; x < mygame.NUM_CELLS_X; x++, i++) {
 			var cell = state.cells[i];
-			//Attempt ONE
-//			ctx.fillStyle = "rgba(" + cell.strengths[0] + "," + cell.strengths[1] + "," + cell.strengths[2] + ", 1)";
-//			
-			//Attempt TWO
-//			ctx.fillStyle = "rgba(" + cell.strength0 + "," + cell.strength1 + "," + cell.strength2 + ", 1)";
-
 			ctx.fillStyle = "rgba(" + (cell&255) + "," + ((cell>>8)&255) + "," + ((cell>>16)&255) + ", 1)";
 			ctx.fillRect(x<<4, y<<4, 16, 16);
 		}
@@ -322,8 +316,8 @@ function renderScene(state) {
 	for (var objectId in state.objects) {
 		var object = state.objects[objectId];
 		ctx.save();
-		var fill = [0,0,0];
-		fill[object.teamIndex] = 64;
+		var fill = [200,200,200];
+		fill[object.teamIndex] = 255;
 		ctx.fillStyle = 'rgba('+fill.join(',')+',1);';
 //		console.log("Drawing at ",object.x8>>8, object.y8>>8,object.vx8,object.vy8);
 		ctx.translate(object.x8>>8, object.y8>>8);
