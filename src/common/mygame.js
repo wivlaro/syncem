@@ -4,58 +4,27 @@ mygame.LPS = 30;
 
 mygame.NUM_CELLS_X = 50;
 mygame.NUM_CELLS_Y = 30;
-//mygame.NUM_CELLS_X = 5;
-//mygame.NUM_CELLS_Y = 3;
-
-
-function Cell() {
-	//ATTEMPT ONE:
-//	this.strengths = [0,0,0];
-
-	//ATTEMPT TWO:
-	this.strength0 = 0;
-	this.strength1 = 0;
-	this.strength2 = 0;
-}
-bserializer.registerClass(Cell, [
-	//ATTEMPT ONE:
-//	{name:'strengths', type:'array', element:{type:'uint8'}}
-//	
-	//ATTEMPT TWO:
-	{name:'strength0', type:'uint8'},
-	{name:'strength1', type:'uint8'},
-	{name:'strength2', type:'uint8'}
-]);
+mygame.WIN_THRESHOLD = mygame.NUM_CELLS_X * mygame.NUM_CELLS_Y * 255 * 50 / 100;
 
 
 function MyGame() {
 	syncem.SyncRoot.apply(this);
 	
-//	this.cells = [];
-//	for (var y = 0; y < mygame.NUM_CELLS_Y; y++) {
-//		for (var x = 0; x < mygame.NUM_CELLS_X; x++) {
-//			this.cells.push(new Cell());
-//		}
-//	}
-
 	this.cells = new Uint32Array(mygame.NUM_CELLS_X * mygame.NUM_CELLS_Y);
 
 	this.teamSizes = [0,0,0];
 	this.weakestTeam = 0;
 	this.teamScores = [0,0,0];
+	this.timeToReset = null;
 }
 MyGame.prototype = new syncem.SyncRoot();
 MyGame.prototype.constructor = MyGame;
 mygame.MyGame = MyGame;
 bserializer.registerClass(MyGame, {
 	fields:[
+		{name:'timeToReset', type:['uint16','null']},
 		{name:'teamSizes', type:'array', element:{type:'uint8'}},
 		{name:'teamScores', type:'array', element:{type:'float64'}},
-		
-		//Attempt ONE and TWO
-//		{name:'cells', type:'array-rle', element:{type:Cell}},
-
-		//Attempt THREE
 		{name:'cells', type:Uint32Array}
 	].concat(syncem.syncRootFields)
 //	onPreWriteFields: function(p, src, objectdb) {
@@ -77,6 +46,52 @@ MyGame.prototype.initialise = function() {
 
 MyGame.prototype.update = function() {
 	syncem.SyncRoot.prototype.update.call(this);	
+
+	var inc_threshold_red =   0x000005,
+		inc_threshold_green = 0x000500,
+		inc_threshold_blue =  0x050000,
+		dec_threshold_red =   0x000003,
+		dec_threshold_green = 0x000300,
+		dec_threshold_blue =  0x030000;
+	if (this.teamScores[0] > mygame.WIN_THRESHOLD) {
+		inc_threshold_red =   0x000001;
+		inc_threshold_green = 0x00ff00;
+		inc_threshold_blue =  0xff0000;
+		dec_threshold_red =   0x000000;
+		dec_threshold_green = 0x000800;
+		dec_threshold_blue =  0x080000;
+		if (this.timeToReset === null) this.timeToReset = mygame.LPS * 12;
+	}
+	if (this.teamScores[1] > mygame.WIN_THRESHOLD) {
+		inc_threshold_red =   0x0000ff;
+		inc_threshold_green = 0x000100;
+		inc_threshold_blue =  0xff0000;
+		dec_threshold_red =   0x000008;
+		dec_threshold_green = 0x000000;
+		dec_threshold_blue =  0x080000;
+		if (this.timeToReset === null) this.timeToReset = mygame.LPS * 12;
+	}
+	if (this.teamScores[2] > mygame.WIN_THRESHOLD) {
+		inc_threshold_red =   0x0000ff;
+		inc_threshold_green = 0x00ff00;
+		inc_threshold_blue =  0x010000;
+		dec_threshold_red =   0x000008;
+		dec_threshold_green = 0x000800;
+		dec_threshold_blue =  0x000000;
+		if (this.timeToReset === null) this.timeToReset = mygame.LPS * 12;
+	}
+
+	if (this.timeToReset !== null) {
+		if (this.timeToReset > 0) {
+			this.timeToReset--;
+		}
+		else {
+			for (var ci = 0, l = this.cells.length; ci < l; ci++) {
+				this.cells[ci] = 0;
+			}
+			this.timeToReset = null;
+		}
+	}
 	
 	for (var ti = 0; ti < this.teamSizes.length; ti++) {
 		this.teamSizes[ti] = 0;
@@ -121,12 +136,12 @@ MyGame.prototype.update = function() {
 			this.teamScores[2] += cell_b;
 
 			var dec = 0, inc = 0;
-			if (cell_r > 0 && (neighbourCounts & 0x0000ff) < 0x000003) dec += 0x000001;
-			else if (cell_r < 255 && cell_r >= cell_b && cell_r >= cell_g  && (neighbourCounts & 0x0000ff) > 0x000005) inc += 0x000001;
-			if (cell_g > 0 && (neighbourCounts & 0x00ff00) < 0x000300) dec += 0x000100;
-			else if (cell_g < 255 && cell_g >= cell_b && cell_g >= cell_r  && (neighbourCounts & 0x00ff00) > 0x000500) inc += 0x000100;
-			if (cell_b > 0 && (neighbourCounts & 0xff0000) < 0x030000) dec += 0x010000;
-			else if (cell_b < 255 && cell_b >= cell_g && cell_b >= cell_r && (neighbourCounts & 0xff0000) > 0x050000) inc += 0x010000;
+			if (cell_r > 0 && (neighbourCounts & 0x0000ff) < dec_threshold_red) dec += 0x000001;
+			else if (cell_r < 255 && cell_r >= cell_b && cell_r >= cell_g  && (neighbourCounts & 0x0000ff) > inc_threshold_red) inc += 0x000001;
+			if (cell_g > 0 && (neighbourCounts & 0x00ff00) < dec_threshold_green) dec += 0x000100;
+			else if (cell_g < 255 && cell_g >= cell_b && cell_g >= cell_r  && (neighbourCounts & 0x00ff00) > inc_threshold_green) inc += 0x000100;
+			if (cell_b > 0 && (neighbourCounts & 0xff0000) < dec_threshold_blue) dec += 0x010000;
+			else if (cell_b < 255 && cell_b >= cell_g && cell_b >= cell_r && (neighbourCounts & 0xff0000) > inc_threshold_blue) inc += 0x010000;
 			this.cells[yoff1 + xoff1] = (cell - dec) + inc;
 		}
 	}

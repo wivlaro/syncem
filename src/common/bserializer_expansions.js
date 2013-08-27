@@ -664,32 +664,18 @@ bserializer.addExpansions(38, {
 	});
 
 bserializer.addExpansions(39, {
-	copy:function copy39Cell(dst,src,objectdb,copyOptions) {
+	copy:function copy39MyGame(dst,src,objectdb,copyOptions) {
 		if (dst == null || dst.constructor !== this.ctor) {
 			dst = new this.ctor();
 		}
-		dst.strength0 = src.strength0;
-		dst.strength1 = src.strength1;
-		dst.strength2 = src.strength2;
-		return dst;},
-	write:function write39Cell(p,src,objectdb,writeOptions) {
-		p.writeUint8(src.strength0);
-		p.writeUint8(src.strength1);
-		p.writeUint8(src.strength2);},
-	read:function read39Cell(p,dst,objectdb) {
-		if (dst == null || dst.constructor !== this.ctor) {
-			dst = new this.ctor();
+		if (typeof src.timeToReset === 'number') {
+		dst.timeToReset = src.timeToReset;
 		}
-		dst.strength0 = p.readUint8();
-		dst.strength1 = p.readUint8();
-		dst.strength2 = p.readUint8();
-		return dst;}
-	});
-
-bserializer.addExpansions(40, {
-	copy:function copy40MyGame(dst,src,objectdb,copyOptions) {
-		if (dst == null || dst.constructor !== this.ctor) {
-			dst = new this.ctor();
+		else if (src.timeToReset === null) {
+		dst.timeToReset = null;
+		}
+		else {
+			throw 'Unhandled type on copy of timeToReset: ' + (src.timeToReset && src.timeToReset.constructor);
 		}
 		var src_teamSizes_2 = src.teamSizes;
 		var l_1 = src_teamSizes_2.length;
@@ -738,7 +724,17 @@ bserializer.addExpansions(40, {
 			dst.messages[i_c] = dst_messages_g;
 		}
 		return dst;},
-	write:function write40MyGame(p,src,objectdb,writeOptions) {
+	write:function write39MyGame(p,src,objectdb,writeOptions) {
+		if (typeof src.timeToReset === 'number') {
+			p.writeUint8(0);
+		p.writeUint16(src.timeToReset);
+		}
+		else if (src.timeToReset === null) {
+			p.writeUint8(1);
+		}
+		else {
+			throw 'Unhandled type on write of timeToReset: ' + (src.timeToReset && src.timeToReset.constructor);
+		}
 		var src_teamSizes_2 = src.teamSizes, l_1 = src_teamSizes_2.length;
 		p.writeSmartUint(l_1);
 		for (var i_0 = 0, src_teamSizes_3; i_0 < l_1; i_0++) {
@@ -761,9 +757,19 @@ bserializer.addExpansions(40, {
 			src_messages_f = src_messages_e[i_c];
 			bserializer.writeGeneric(p, src_messages_f, objectdb, writeOptions);
 		}},
-	read:function read40MyGame(p,dst,objectdb) {
+	read:function read39MyGame(p,dst,objectdb) {
 		if (dst == null || dst.constructor !== this.ctor) {
 			dst = new this.ctor();
+		}
+		switch (p.readUint8()) {
+			case 0:
+		dst.timeToReset = p.readUint16();
+				break;
+			case 1:
+		dst.timeToReset = null;
+				break;
+			default:
+				throw 'Unhandled type on read of timeToReset';
 		}
 		var l_1 = p.readSmartUint();
 		if (dst.teamSizes == null || dst.teamSizes.length !== l_1) {
