@@ -27,11 +27,13 @@ Navigate to http://localhost:3001
 Directory structure
 -------------------
 
+If you want to play around with it, **the most interesting bits to change are in bold**:
+
 * `public` - static files served up
 * `src` - split into three categories, server and client, and common, which is code to run on both server and client
-* `src/client/main.js` - File that kicks off the whole process for the client. *Hacking around with renderScene is probably most interesting*
-* `src/common/mygame.js` - *The core game logic - to be changed depending on the game*
-* `src/common/player.js` - *Contains the player class, also game dependent*
+* `src/client/main.js` - File that kicks off the whole process for the client. **Hacking around with the `function renderScene()` is probably most interesting**
+* `src/common/mygame.js` - **The core game logic - to be changed depending on the game**
+* `src/common/player.js` - **Contains the player class, also game dependent**
 * `src/common/bserializer.js` - The binary serialization/deserialization component
 * `src/common/syncem.js` - The main engine for the network synchronization
 * `src/common/bserializer_expansions.js` - Automatically generated on the server dependent on registered classes - *don't* edit this, as it gets rewritten by the server on startup
@@ -60,4 +62,5 @@ To-Do
  * Make a convenience wrapper for declaring classes and bserializer.registerClass
 
 Enjoy!
+
 -Bill
