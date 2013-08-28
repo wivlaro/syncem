@@ -27,18 +27,18 @@ Navigate to http://localhost:3001
 Directory structure
 -------------------
 
-public - static files served up
-src - split into three categories, server and client, and common, which is code to run on both server and client
-src/client/main.js - File that kicks off the whole process for the client. Hacking around with renderScene is probably most interesting
-src/common/mygame.js - The core game logic - to be changed depending on the game
-src/common/player.js - Contains the player class
-src/common/bserializer.js - The binary serialization/deserialization component
-src/common/syncem.js - The main engine for the network synchronization
-src/common/bserializer_expansions.js - Automatically generated on the server dependent on registered classes
-src/common/bserializer-cannon.js - bindings for the http://cannonjs.org/ physics library so you can include it in your world state
-src/server/main.js - Hopefully self-explanatory
-src/server/gameserver.js - Server-side plumbing for syncem for a game, user management
-src/server/client.js - Server's model of a user, as connected to it
+* `public` - static files served up
+* `src` - split into three categories, server and client, and common, which is code to run on both server and client
+* `src/client/main.js` - File that kicks off the whole process for the client. *Hacking around with renderScene is probably most interesting*
+* `src/common/mygame.js` - *The core game logic - to be changed depending on the game*
+* `src/common/player.js` - *Contains the player class, also game dependent*
+* `src/common/bserializer.js` - The binary serialization/deserialization component
+* `src/common/syncem.js` - The main engine for the network synchronization
+* `src/common/bserializer_expansions.js` - Automatically generated on the server dependent on registered classes - *don't* edit this, as it gets rewritten by the server on startup
+* `src/common/bserializer-cannon.js` - bindings for the http://cannonjs.org/ physics library so you can include it in your world state
+* `src/server/main.js` - Hopefully self-explanatory
+* `src/server/gameserver.js` - Server-side plumbing for syncem for a game, user management
+* `src/server/client.js` - Server's model of a user, as connected to it
 
 In theory you can hack around with main.js renderScene() and src/common/mygame.js and be able to make something. After rewriting common code, you will need to restart your server before reconnecting (or you will get out of sync problems). 
 
