@@ -57,6 +57,7 @@ It is available under the permissive MIT license, so please feel free to take an
 To-Do
 -----
 
+ * More documentation on the core systems: syncem.js and bserializer.js
  * More commentry in the code documenting what is happening!
  * Abstract out the more boring stuff into more of a library
  * Make a convenience wrapper for declaring classes and bserializer.registerClass
