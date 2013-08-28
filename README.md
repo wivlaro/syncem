@@ -8,7 +8,7 @@ Live Demo
 
 To see this example running, go to http://wivlaro.com:3001
 
-The demo game is a multiplayer territory game. There are three teams, you click to move, 
+The demo game is a multiplayer territory game. There are three teams, you click to move, the idea is to dominate the play area with your colour, red, green, or blue.
 
 Quick start
 -----------
