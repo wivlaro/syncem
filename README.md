@@ -58,6 +58,7 @@ To-Do
 -----
 
  * More documentation on the core systems: syncem.js and bserializer.js
+ * Rename _expansions to _generated so it makes more sense
  * More commentry in the code documenting what is happening!
  * Abstract out the more boring stuff into more of a library
  * Make a convenience wrapper for declaring classes and bserializer.registerClass
